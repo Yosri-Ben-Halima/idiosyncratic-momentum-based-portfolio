@@ -1,0 +1,9 @@
+start_date: "2020-01-01"
+end_date: "2021-01-01"
+momentum_window: 252      # trading days for rolling CAPM window
+momentum_skip: 21         # skip last N days (skip-1-month standard)
+top_k: 30                 # stocks to hold
+z_threshold: 2            # z-score threshold for signal strength (not used in this version)
+rebalance_freq: "ME"      # month-end rebalancing
+min_history: 300          # min days of data before a stock is eligible
+transaction_cost_bps: 20  # round-trip transaction cost in basis points (e.g. 20 bps = 0.0020)
