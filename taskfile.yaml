@@ -9,3 +9,9 @@ tasks:
       - pipreqs . --force
       # install all dependencies
       - pip install -r requirements.txt
+
+  run:
+    desc: "Run the main script to execute the backtesting pipeline"
+    deps: [install]
+    cmds:
+      - python src/main.py
