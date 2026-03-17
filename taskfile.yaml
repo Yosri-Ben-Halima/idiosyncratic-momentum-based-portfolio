@@ -6,7 +6,7 @@ tasks:
     desc: "Automatically detect and install Python dependencies"
     cmds:
       # generate requirements.txt using pipreqs (overwrite if exists)
-      - pipreqs . --force
+      # - pipreqs . --force
       # install all dependencies
       - pip install -r requirements.txt
 
@@ -14,4 +14,4 @@ tasks:
     desc: "Run the main script to execute the backtesting pipeline"
     deps: [install]
     cmds:
-      - python src/main.py
+      - python main.py

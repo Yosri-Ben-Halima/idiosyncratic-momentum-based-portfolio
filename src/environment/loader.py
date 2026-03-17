@@ -9,7 +9,7 @@ def load_config():
     Returns:
         dict: Configuration dictionary with injected risk-free rate and derived parameters.
     """
-    with open("config.yaml") as f:
+    with open("src/environment/config.yaml") as f:
         CFG = yaml.safe_load(f)
 
     CFG["rf_annual"] = _fetch_risk_free_rate()  # injected at runtime
