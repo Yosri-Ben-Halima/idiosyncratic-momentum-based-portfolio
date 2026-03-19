@@ -333,35 +333,7 @@ task run
 
 **Output**:
 
-- Console: Performance table (metrics comparison)
-- `image/tearsheet_*.png`: Multi-panel visualizations
-- Performance metrics printed to stdout
-
-### Example Output
-
-```bash
-Strategy window  : 2020-01-01 → 2026-01-01
-Fetching data from: 2018-03-14 (warmup = 543 business days)
-✓ Universe: 496 stocks | 2018-03-14 → 2026-01-01
-✓ First date with holdings : 2020-02-06
-✓ Strategy start           : 2020-01-01
-
-────────────────────────────────────────────────────────
-  Metric            Strategy       SP500        Delta
-────────────────────────────────────────────────────────
-  Total Return       156.23%      124.31%     +31.92%
-  CAGR                18.42%       16.72%      +1.70%
-  Vol                 14.82%       15.23%      -0.41%
-  Sharpe               1.23         1.08       +1.16x
-  Sortino              1.78         1.52       +1.17x
-  Max DD             -28.45%      -33.21%      +4.76%
-  Calmar              0.648        0.503       +1.29x
-  Alpha                1.54%        0.00%      +1.54%
-  Beta                 0.869        1.000      -13.1%
-  IR                   0.38         0.00         N/A
-  Win Rate            54.23%       51.82%      +2.41%
-────────────────────────────────────────────────────────
-```
+- `image/tearsheet_*.png`: Multi-panel visualizations and performance metrics.
 
 ---
 
