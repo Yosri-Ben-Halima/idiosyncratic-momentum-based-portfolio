@@ -112,10 +112,14 @@ def plot_sheet1(
 
     # ── ROW 0: Cumulative returns + drawdown ──────────────────────────────
     gs0 = gridspec.GridSpecFromSubplotSpec(
-        2, 1, subplot_spec=outer[0], height_ratios=[3, 1], hspace=0.08
+        1,
+        1,
+        subplot_spec=outer[0],
+        # height_ratios=[3, 1],
+        # hspace=0.08,
     )
     ax_cum = fig.add_subplot(gs0[0])
-    ax_dd = fig.add_subplot(gs0[1], sharex=ax_cum)
+    # ax_dd = fig.add_subplot(gs0[1], sharex=ax_cum)
 
     cum_port = (1 + port_ret).cumprod()
     cum_bench = (1 + bench_ret).cumprod()
@@ -178,27 +182,27 @@ def plot_sheet1(
     ax_cum.legend(fontsize=10)
     _polish(ax_cum)
 
-    dd_port = cum_port / cum_port.cummax() - 1
-    dd_bench = cum_bench / cum_bench.cummax() - 1
-    ax_dd.fill_between(
-        dd_port.index,
-        dd_port,
-        0,
-        color=PALETTE["strategy"],
-        alpha=0.6,
-        label="Strategy DD",
-    )
-    ax_dd.fill_between(
-        dd_bench.index,
-        dd_bench,
-        0,
-        color=PALETTE["benchmark"],
-        alpha=0.4,
-        label="Benchmark DD",
-    )
-    ax_dd.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y * 100:.0f}%"))
-    ax_dd.legend(fontsize=9)
-    _polish(ax_dd)
+    # dd_port = cum_port / cum_port.cummax() - 1
+    # dd_bench = cum_bench / cum_bench.cummax() - 1
+    # ax_dd.fill_between(
+    #     dd_port.index,
+    #     dd_port,
+    #     0,
+    #     color=PALETTE["strategy"],
+    #     alpha=0.6,
+    #     label="Strategy DD",
+    # )
+    # ax_dd.fill_between(
+    #     dd_bench.index,
+    #     dd_bench,
+    #     0,
+    #     color=PALETTE["benchmark"],
+    #     alpha=0.4,
+    #     label="Benchmark DD",
+    # )
+    # ax_dd.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y * 100:.0f}%"))
+    # ax_dd.legend(fontsize=9)
+    # _polish(ax_dd)
 
     # ── ROW 1: Metrics table + bar charts ────────────────────────────────
     gs1 = gridspec.GridSpecFromSubplotSpec(1, 4, subplot_spec=outer[1], wspace=0.35)
@@ -248,7 +252,7 @@ def plot_sheet1(
     )
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(9)
-    tbl.scale(1.2, 1.6)
+    tbl.scale(0.9, 1.6)
     for (r, c), cell in tbl.get_celld().items():
         cell.set_facecolor(PALETTE["panel_bg"] if r > 0 else "#1f2937")
         cell.set_edgecolor(PALETTE["grid"])
@@ -728,7 +732,7 @@ def plot_sheet3(
     prob_pos = (sim_cum[:, -1] > 0).mean()
     ax_fan.text(
         0.02,
-        0.97,
+        0.78,
         f"P(profit): {prob_pos:.1%}\nMedian: {bands[50][-1]:+.1%}\n"
         f"90% CI: [{bands[5][-1]:+.1%}, {bands[95][-1]:+.1%}]",
         transform=ax_fan.transAxes,

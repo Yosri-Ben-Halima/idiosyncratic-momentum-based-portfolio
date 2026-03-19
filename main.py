@@ -140,10 +140,10 @@ def main():
         weights,
         CFG["top_k"],
         RF_DAILY,
-        252,
-        10000,
-        504,
-        save_prefix="image/tearsheet.png",
+        CFG["momentum_window"],
+        CFG["monte_carlo_runs"],
+        CFG["monte_carlo_days"],
+        save_prefix="image/tearsheet",
     )
 
 
