@@ -9,7 +9,7 @@ from src.environment import load_config
 from src.feature_engineering import build_idiosyncratic_momentum, zscore_normalize
 from src.portfolio_construction import build_portfolio
 from utils.tick_helper import get_sp500_tickers
-from src.visualizations import fmt_pct, plot_tearsheet
+from src.visualizations import fmt_pct, plot_tearsheets
 
 warnings.filterwarnings("ignore")
 
@@ -84,9 +84,13 @@ def main():
     print(f"✓ First date with holdings : {first_invested.date()}")
     print(f"✓ Strategy start           : {start_dt.date()}")
     # 6. Performance metrics
-    metrics_port = performance_metrics(port_ret, bench_ret, CFG["rf_daily"], label="Idio Momentum")
+    metrics_port = performance_metrics(
+        port_ret, bench_ret, CFG["rf_daily"], label="Idio Momentum"
+    )
     bench_only_ret = bench_ret.copy()
-    metrics_bench = performance_metrics(bench_only_ret, bench_only_ret, CFG["rf_daily"], label="SP500")
+    metrics_bench = performance_metrics(
+        bench_only_ret, bench_only_ret, CFG["rf_daily"], label="SP500"
+    )
 
     print("\n" + "─" * 60)
     print(f"  {'Metric':<14}  {'Strategy':>12}  {'SP500':>12}  {'Delta':>12}")
@@ -127,7 +131,7 @@ def main():
             )
         print(f"  {k:<14}  {sv:>12}  {bv:>12}  {delta:>12}")
     print("─" * 60)
-    plot_tearsheet(
+    plot_tearsheets(
         port_ret,
         bench_ret,
         metrics_port,
@@ -139,7 +143,8 @@ def main():
         252,
         10000,
         504,
-        save_path="image/tearsheet.png",
+        save_prefix="image/tearsheet.png",
     )
+
 
 main()

@@ -12,6 +12,6 @@ tasks:
 
   run:
     desc: "Run the main script to execute the backtesting pipeline"
-    deps: [install]
+    # deps: [install]
     cmds:
       - python main.py

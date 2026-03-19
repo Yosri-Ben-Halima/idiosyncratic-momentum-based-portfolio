@@ -49,62 +49,73 @@ def fmt_x(x):
     return f"{x:.2f}"
 
 
-def plot_tearsheet(
-    port_ret: pd.Series,
-    bench_ret: pd.Series,
-    metrics_port: dict,
-    metrics_bench: dict,
-    signal_z: pd.DataFrame,
-    weights: pd.DataFrame,
-    top_k: int,
-    rf_daily: float,
-    window: int = 252,
-    n_sims: int = 1000,
-    horizon_days: int = 504,
-    save_path: str = "tearsheet.png",
-):
-    """
-    Single-figure tearsheet composing all analysis panels.
-    Layout (5 rows × 4 cols):
-      Row 0 [full width]   — Cumulative returns + drawdown sub-panel
-      Row 1 [full width]   — Metrics table
-      Row 2 [4 cols]       — Sharpe bar | Sortino bar | Calmar bar | Rolling beta
-      Row 3 [full width]   — Rolling Sharpe / Beta / Alpha (3 sub-axes stacked)
-      Row 4 [2+2 cols]     — Monthly heatmap × 2
-      Row 5 [3 cols]       — Return dist | QQ | VaR
-      Row 6 [2 cols]       — Turnover | Holdings
-      Row 7 [2 cols]       — MC fan (left+centre) | Terminal dist (right)
-    """
-    set_dark_style()
+def _polish(ax):
+    ax.set_facecolor(PALETTE["panel_bg"])
+    ax.grid(True, alpha=0.35)
+    for spine in ["top", "right"]:
+        ax.spines[spine].set_visible(False)
 
-    fig = plt.figure(figsize=(28, 72), facecolor=PALETTE["dark_bg"])
-    # Use nested GridSpecs for cleaner control
+
+def _monthly_matrix(rets):
+    monthly = rets.resample("ME").apply(lambda x: (1 + x).prod() - 1)
+    df = monthly.to_frame("ret")
+    df["year"] = df.index.year
+    df["month"] = df.index.month
+    pivot = df.pivot(index="year", columns="month", values="ret")
+    pivot.columns = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ]
+    return pivot
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SHEET 1 — Performance Overview  (16:9)
+# Layout (3 rows):
+#   Row 0 [3h + 1h]  — Cumulative returns + drawdown sub-panel  (full width)
+#   Row 1 [table×3 + bars]  — Metrics table + Sharpe/Sortino/Calmar bars
+#   Row 2 [3 stacked] — Rolling Sharpe / Beta / Alpha
+# ─────────────────────────────────────────────────────────────────────────────
+def plot_sheet1(
+    port_ret,
+    bench_ret,
+    metrics_port,
+    metrics_bench,
+    rf_daily,
+    window=252,
+    save_path="sheet1_performance.png",
+):
+    set_dark_style()
+    fig = plt.figure(figsize=(28, 15.75), facecolor=PALETTE["dark_bg"])  # 16:9
+
     outer = gridspec.GridSpec(
-        9,
+        3,
         1,
         figure=fig,
-        hspace=0.55,
-        top=0.97,
-        bottom=0.01,
+        hspace=0.50,
+        top=0.92,
+        bottom=0.05,
         left=0.05,
         right=0.97,
+        height_ratios=[2.5, 1.8, 2.2],
     )
 
-    # ── Helper: shared spine / grid cleanup ───────────────────────────────────
-    def _polish(ax):
-        ax.set_facecolor(PALETTE["panel_bg"])
-        ax.grid(True, alpha=0.35)
-        for spine in ["top", "right"]:
-            ax.spines[spine].set_visible(False)
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # ROW 0: Cumulative returns (3 height) + drawdown (1 height)
-    # ══════════════════════════════════════════════════════════════════════════
+    # ── ROW 0: Cumulative returns + drawdown ──────────────────────────────
     gs0 = gridspec.GridSpecFromSubplotSpec(
         2, 1, subplot_spec=outer[0], height_ratios=[3, 1], hspace=0.08
     )
     ax_cum = fig.add_subplot(gs0[0])
-    ax_dd_main = fig.add_subplot(gs0[1], sharex=ax_cum)
+    ax_dd = fig.add_subplot(gs0[1], sharex=ax_cum)
 
     cum_port = (1 + port_ret).cumprod()
     cum_bench = (1 + bench_ret).cumprod()
@@ -169,7 +180,7 @@ def plot_tearsheet(
 
     dd_port = cum_port / cum_port.cummax() - 1
     dd_bench = cum_bench / cum_bench.cummax() - 1
-    ax_dd_main.fill_between(
+    ax_dd.fill_between(
         dd_port.index,
         dd_port,
         0,
@@ -177,7 +188,7 @@ def plot_tearsheet(
         alpha=0.6,
         label="Strategy DD",
     )
-    ax_dd_main.fill_between(
+    ax_dd.fill_between(
         dd_bench.index,
         dd_bench,
         0,
@@ -185,15 +196,11 @@ def plot_tearsheet(
         alpha=0.4,
         label="Benchmark DD",
     )
-    ax_dd_main.yaxis.set_major_formatter(
-        plt.FuncFormatter(lambda y, _: f"{y * 100:.0f}%")
-    )
-    ax_dd_main.legend(fontsize=9)
-    _polish(ax_dd_main)
+    ax_dd.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y * 100:.0f}%"))
+    ax_dd.legend(fontsize=9)
+    _polish(ax_dd)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # ROW 1: Metrics table + 3 bar charts
-    # ══════════════════════════════════════════════════════════════════════════
+    # ── ROW 1: Metrics table + bar charts ────────────────────────────────
     gs1 = gridspec.GridSpecFromSubplotSpec(1, 4, subplot_spec=outer[1], wspace=0.35)
     ax_tbl = fig.add_subplot(gs1[0, :3])
     ax_tbl.axis("off")
@@ -225,15 +232,13 @@ def plot_tearsheet(
     }
     table_data = []
     for k in keys:
-        s_val = (
-            fmts[k](metrics_port[k]) if pd.notna(metrics_port.get(k, np.nan)) else "N/A"
-        )
-        b_val = (
+        s = fmts[k](metrics_port[k]) if pd.notna(metrics_port.get(k, np.nan)) else "N/A"
+        b = (
             fmts[k](metrics_bench[k])
             if pd.notna(metrics_bench.get(k, np.nan))
             else "N/A"
         )
-        table_data.append([k, s_val, b_val])
+        table_data.append([k, s, b])
 
     tbl = ax_tbl.table(
         cellText=table_data,
@@ -243,7 +248,7 @@ def plot_tearsheet(
     )
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(9)
-    tbl.scale(1.2, 1.5)
+    tbl.scale(1.2, 1.6)
     for (r, c), cell in tbl.get_celld().items():
         cell.set_facecolor(PALETTE["panel_bg"] if r > 0 else "#1f2937")
         cell.set_edgecolor(PALETTE["grid"])
@@ -253,10 +258,6 @@ def plot_tearsheet(
         )
     ax_tbl.set_title("Performance Metrics", fontsize=11, fontweight="bold", pad=6)
 
-    for col_idx, metric in enumerate(["Sharpe", "Sortino", "Calmar"]):
-        fig.add_subplot(gs1[0, col_idx]) if col_idx < 3 else None
-
-    # Redraw bars properly alongside the table (table uses cols 0–2, bars go in col 3 split manually)
     gs1b = gridspec.GridSpecFromSubplotSpec(3, 1, subplot_spec=gs1[0, 3], hspace=0.6)
     for i, metric in enumerate(["Sharpe", "Sortino", "Calmar"]):
         ax_b = fig.add_subplot(gs1b[i])
@@ -283,11 +284,10 @@ def plot_tearsheet(
         ax_b.axhline(0, color=PALETTE["neutral"], lw=0.7)
         _polish(ax_b)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # ROW 2: Rolling metrics (Sharpe / Beta / Alpha stacked)
-    # ══════════════════════════════════════════════════════════════════════════
-    gs2 = gridspec.GridSpecFromSubplotSpec(3, 1, subplot_spec=outer[2], hspace=0.15)
+    # ── ROW 2: Rolling Sharpe / Beta / Alpha ──────────────────────────────
+    gs2 = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=outer[2], wspace=0.30)
 
+    # Rolling Sharpe
     ax_rs = fig.add_subplot(gs2[0])
     roll_sharpe_port = (
         port_ret.rolling(window).mean() / port_ret.rolling(window).std()
@@ -315,7 +315,8 @@ def plot_tearsheet(
     ax_rs.legend(fontsize=8)
     _polish(ax_rs)
 
-    ax_rb = fig.add_subplot(gs2[1], sharex=ax_rs)
+    # Rolling Beta
+    ax_rb = fig.add_subplot(gs2[1])
     roll_cov = port_ret.rolling(window).cov(bench_ret)
     roll_var = bench_ret.rolling(window).var()
     roll_beta = roll_cov / roll_var
@@ -325,7 +326,8 @@ def plot_tearsheet(
     ax_rb.legend(fontsize=8)
     _polish(ax_rb)
 
-    ax_ra = fig.add_subplot(gs2[2], sharex=ax_rs)
+    # Rolling Alpha
+    ax_ra = fig.add_subplot(gs2[2])
     roll_alpha = (
         port_ret.rolling(window).mean()
         - (rf_daily + roll_beta * (bench_ret.rolling(window).mean() - rf_daily))
@@ -352,66 +354,45 @@ def plot_tearsheet(
     ax_ra.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.1f}%"))
     _polish(ax_ra)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # ROW 3: Monthly heatmaps (side by side)
-    # ══════════════════════════════════════════════════════════════════════════
-    gs3 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outer[3], wspace=0.3)
-
-    def _monthly_matrix(rets):
-        monthly = rets.resample("ME").apply(lambda x: (1 + x).prod() - 1)
-        df = monthly.to_frame("ret")
-        df["year"] = df.index.year
-        df["month"] = df.index.month
-        pivot = df.pivot(index="year", columns="month", values="ret")
-        pivot.columns = [
-            "Jan",
-            "Feb",
-            "Mar",
-            "Apr",
-            "May",
-            "Jun",
-            "Jul",
-            "Aug",
-            "Sep",
-            "Oct",
-            "Nov",
-            "Dec",
-        ]
-        return pivot
-
-    cmap_rg = LinearSegmentedColormap.from_list(
-        "rg", [PALETTE["negative"], "#1a1a2e", PALETTE["strategy"]]
+    fig.suptitle(
+        "Sheet 1 / 3 — Performance Overview",
+        fontsize=16,
+        fontweight="bold",
+        color=PALETTE["text"],
+        y=0.98,
     )
-    for col_i, (rets, title) in enumerate(
-        [
-            (port_ret, "Strategy Monthly Returns"),
-            (bench_ret, "SP500 Monthly Returns"),
-        ]
-    ):
-        ax_hm = fig.add_subplot(gs3[col_i])
-        sns.heatmap(
-            _monthly_matrix(rets) * 100,
-            ax=ax_hm,
-            cmap=cmap_rg,
-            center=0,
-            annot=True,
-            fmt=".1f",
-            annot_kws={"size": 7},
-            linewidths=0.4,
-            linecolor=PALETTE["grid"],
-            cbar_kws={"label": "Return (%)"},
-        )
-        ax_hm.set_title(title, fontsize=11, fontweight="bold", pad=8)
-        ax_hm.set_xlabel("")
-        ax_hm.set_facecolor(PALETTE["panel_bg"])
-        plt.setp(ax_hm.get_xticklabels(), rotation=0, fontsize=8)
+    plt.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=PALETTE["dark_bg"])
+    plt.close(fig)
+    print(f"✓ Saved → {save_path}")
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # ROW 4: Return distribution | QQ | VaR
-    # ══════════════════════════════════════════════════════════════════════════
-    gs4 = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=outer[4], wspace=0.35)
 
-    ax_hist = fig.add_subplot(gs4[0])
+# ─────────────────────────────────────────────────────────────────────────────
+# SHEET 2 — Risk & Distribution  (16:9)
+# Layout (2 rows):
+#   Row 0 [3 cols]  — Return dist | QQ | VaR/CVaR
+#   Row 1 [2 cols]  — Monthly heatmap Strategy | Monthly heatmap SP500
+#   Row 2 [2 cols]  — Underwater Strategy | Underwater SP500
+# ─────────────────────────────────────────────────────────────────────────────
+def plot_sheet2(port_ret, bench_ret, save_path="sheet2_risk.png"):
+    set_dark_style()
+    fig = plt.figure(figsize=(28, 15.75), facecolor=PALETTE["dark_bg"])
+
+    outer = gridspec.GridSpec(
+        3,
+        1,
+        figure=fig,
+        hspace=0.55,
+        top=0.92,
+        bottom=0.05,
+        left=0.05,
+        right=0.97,
+        height_ratios=[1.6, 2.2, 1.6],
+    )
+
+    # ── ROW 0: Return dist | QQ | VaR ────────────────────────────────────
+    gs0 = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=outer[0], wspace=0.35)
+
+    ax_hist = fig.add_subplot(gs0[0])
     for rets, color, label in [
         (port_ret, PALETTE["strategy"], "Strategy"),
         (bench_ret, PALETTE["benchmark"], "SP500"),
@@ -428,7 +409,7 @@ def plot_tearsheet(
     ax_hist.legend(fontsize=8)
     _polish(ax_hist)
 
-    ax_qq = fig.add_subplot(gs4[1])
+    ax_qq = fig.add_subplot(gs0[1])
     sorted_rets = np.sort(port_ret.dropna().values)
     n = len(sorted_rets)
     theoretical = stats.norm.ppf(np.linspace(0.01, 0.99, n))
@@ -452,7 +433,7 @@ def plot_tearsheet(
     ax_qq.legend(fontsize=8)
     _polish(ax_qq)
 
-    ax_var = fig.add_subplot(gs4[2])
+    ax_var = fig.add_subplot(gs0[2])
     cl_colors = [PALETTE["accent"], PALETTE["negative"], "#8e44ad"]
     for rets, ls, lbl in [(port_ret, "-", "Strategy"), (bench_ret, "--", "SP500")]:
         sorted_r = np.sort(rets.dropna().values)
@@ -479,10 +460,107 @@ def plot_tearsheet(
     ax_var.legend(fontsize=7)
     _polish(ax_var)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # ROW 5: Annual returns bar chart (full width)
-    # ══════════════════════════════════════════════════════════════════════════
-    ax_ann = fig.add_subplot(outer[5])
+    # ── ROW 1: Monthly heatmaps ───────────────────────────────────────────
+    gs1 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outer[1], wspace=0.30)
+    cmap_rg = LinearSegmentedColormap.from_list(
+        "rg", [PALETTE["negative"], "#1a1a2e", PALETTE["strategy"]]
+    )
+    for col_i, (rets, title) in enumerate(
+        [
+            (port_ret, "Strategy Monthly Returns"),
+            (bench_ret, "SP500 Monthly Returns"),
+        ]
+    ):
+        ax_hm = fig.add_subplot(gs1[col_i])
+        sns.heatmap(
+            _monthly_matrix(rets) * 100,
+            ax=ax_hm,
+            cmap=cmap_rg,
+            center=0,
+            annot=True,
+            fmt=".1f",
+            annot_kws={"size": 7},
+            linewidths=0.4,
+            linecolor=PALETTE["grid"],
+            cbar_kws={"label": "Return (%)"},
+        )
+        ax_hm.set_title(title, fontsize=11, fontweight="bold", pad=8)
+        ax_hm.set_xlabel("")
+        ax_hm.set_facecolor(PALETTE["panel_bg"])
+        plt.setp(ax_hm.get_xticklabels(), rotation=0, fontsize=8)
+
+    # ── ROW 2: Underwater charts ──────────────────────────────────────────
+    gs2 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outer[2], wspace=0.30)
+    for col_i, (rets, color, label) in enumerate(
+        [
+            (port_ret, PALETTE["strategy"], "Strategy"),
+            (bench_ret, PALETTE["benchmark"], "SP500"),
+        ]
+    ):
+        ax_uw = fig.add_subplot(gs2[col_i])
+        cum = (1 + rets).cumprod()
+        dd = (cum / cum.cummax() - 1) * 100
+        ax_uw.fill_between(dd.index, dd, 0, color=color, alpha=0.6)
+        ax_uw.plot(dd.index, dd, color=color, lw=0.8)
+        ax_uw.axhline(0, color=PALETTE["neutral"], lw=0.7)
+        worst_idx = dd.idxmin()
+        ax_uw.annotate(
+            f"Max DD: {dd.min():.1f}%",
+            xy=(worst_idx, dd.min()),
+            xytext=(worst_idx, dd.min() * 0.5),
+            arrowprops=dict(arrowstyle="->", color=PALETTE["text"], lw=0.8),
+            fontsize=9,
+            color=PALETTE["text"],
+        )
+        ax_uw.set_title(f"{label} — Underwater Chart", fontsize=10, fontweight="bold")
+        ax_uw.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0f}%"))
+        _polish(ax_uw)
+
+    fig.suptitle(
+        "Sheet 2 / 3 — Risk & Distribution Analysis",
+        fontsize=16,
+        fontweight="bold",
+        color=PALETTE["text"],
+        y=0.98,
+    )
+    plt.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=PALETTE["dark_bg"])
+    plt.close(fig)
+    print(f"✓ Saved → {save_path}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SHEET 3 — Portfolio & Forecasting  (16:9)
+# Layout (2 rows):
+#   Row 0 [3 cols]  — Annual returns (full) | Turnover | Holdings | Entry z
+#   Row 1 [2 cols]  — MC fan | Terminal distribution
+# ─────────────────────────────────────────────────────────────────────────────
+def plot_sheet3(
+    port_ret,
+    bench_ret,
+    signal_z,
+    weights,
+    top_k,
+    n_sims=1000,
+    horizon_days=504,
+    save_path="sheet3_portfolio.png",
+):
+    set_dark_style()
+    fig = plt.figure(figsize=(28, 15.75), facecolor=PALETTE["dark_bg"])
+
+    outer = gridspec.GridSpec(
+        3,
+        1,
+        figure=fig,
+        hspace=0.50,
+        top=0.92,
+        bottom=0.05,
+        left=0.05,
+        right=0.97,
+        height_ratios=[1.6, 1.4, 2.5],
+    )
+
+    # ── ROW 0: Annual returns ─────────────────────────────────────────────
+    ax_ann = fig.add_subplot(outer[0])
     annual_port = port_ret.resample("YE").apply(lambda x: (1 + x).prod() - 1) * 100
     annual_bench = bench_ret.resample("YE").apply(lambda x: (1 + x).prod() - 1) * 100
     years = annual_port.index.year
@@ -525,12 +603,10 @@ def plot_tearsheet(
     ax_ann.legend(fontsize=9)
     _polish(ax_ann)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # ROW 6: Turnover | Holdings | Entry z-score threshold
-    # ══════════════════════════════════════════════════════════════════════════
-    gs6 = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=outer[6], wspace=0.35)
+    # ── ROW 1: Turnover | Holdings | Entry z-score ────────────────────────
+    gs1 = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=outer[1], wspace=0.35)
 
-    ax_tv = fig.add_subplot(gs6[0])
+    ax_tv = fig.add_subplot(gs1[0])
     turnover = weights.diff().abs().sum(axis=1).resample("ME").sum() / 2
     ax_tv.bar(
         turnover.index, turnover.values, color=PALETTE["accent"], alpha=0.8, width=20
@@ -547,7 +623,7 @@ def plot_tearsheet(
     ax_tv.legend(fontsize=8)
     _polish(ax_tv)
 
-    ax_nh = fig.add_subplot(gs6[1])
+    ax_nh = fig.add_subplot(gs1[1])
     n_holdings = (weights > 0).sum(axis=1)
     ax_nh.plot(n_holdings.index, n_holdings.values, color=PALETTE["strategy"], lw=1.2)
     ax_nh.fill_between(
@@ -557,7 +633,7 @@ def plot_tearsheet(
     ax_nh.set_ylabel("# Holdings")
     _polish(ax_nh)
 
-    ax_ez = fig.add_subplot(gs6[2])
+    ax_ez = fig.add_subplot(gs1[2])
 
     def _row_cutoff(row):
         valid = row.dropna()
@@ -574,41 +650,10 @@ def plot_tearsheet(
     ax_ez.set_ylabel("Min z-score to enter")
     _polish(ax_ez)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # ROW 7: Underwater plots
-    # ══════════════════════════════════════════════════════════════════════════
-    gs7 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outer[7], wspace=0.3)
-    for col_i, (rets, color, label) in enumerate(
-        [
-            (port_ret, PALETTE["strategy"], "Strategy"),
-            (bench_ret, PALETTE["benchmark"], "SP500"),
-        ]
-    ):
-        ax_uw = fig.add_subplot(gs7[col_i])
-        cum = (1 + rets).cumprod()
-        dd = (cum / cum.cummax() - 1) * 100
-        ax_uw.fill_between(dd.index, dd, 0, color=color, alpha=0.6)
-        ax_uw.plot(dd.index, dd, color=color, lw=0.8)
-        ax_uw.axhline(0, color=PALETTE["neutral"], lw=0.7)
-        worst_idx = dd.idxmin()
-        ax_uw.annotate(
-            f"Max DD: {dd.min():.1f}%",
-            xy=(worst_idx, dd.min()),
-            xytext=(worst_idx, dd.min() * 0.5),
-            arrowprops=dict(arrowstyle="->", color=PALETTE["text"], lw=0.8),
-            fontsize=9,
-            color=PALETTE["text"],
-        )
-        ax_uw.set_title(f"{label} — Underwater Chart", fontsize=10, fontweight="bold")
-        ax_uw.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0f}%"))
-        _polish(ax_uw)
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # ROW 8: Monte Carlo fan + terminal distribution
-    # ══════════════════════════════════════════════════════════════════════════
-    gs8 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outer[8], wspace=0.3)
-    ax_fan = fig.add_subplot(gs8[0])
-    ax_ter = fig.add_subplot(gs8[1])
+    # ── ROW 2: Monte Carlo fan + terminal distribution ────────────────────
+    gs2 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outer[2], wspace=0.30)
+    ax_fan = fig.add_subplot(gs2[0])
+    ax_ter = fig.add_subplot(gs2[1])
 
     BLOCK_SIZE = 21
     returns_arr = port_ret.dropna().values
@@ -684,7 +729,8 @@ def plot_tearsheet(
     ax_fan.text(
         0.02,
         0.97,
-        f"P(profit): {prob_pos:.1%}\nMedian: {bands[50][-1]:+.1%}\n90% CI: [{bands[5][-1]:+.1%}, {bands[95][-1]:+.1%}]",
+        f"P(profit): {prob_pos:.1%}\nMedian: {bands[50][-1]:+.1%}\n"
+        f"90% CI: [{bands[5][-1]:+.1%}, {bands[95][-1]:+.1%}]",
         transform=ax_fan.transAxes,
         fontsize=8,
         va="top",
@@ -763,15 +809,60 @@ def plot_tearsheet(
     ax_ter.legend(fontsize=7, ncol=2)
     _polish(ax_ter)
 
-    # ── Title banner ──────────────────────────────────────────────────────────
     fig.suptitle(
-        "Strategy Tearsheet — Idiosyncratic Momentum",
-        fontsize=18,
+        "Sheet 3 / 3 — Portfolio Construction & Monte Carlo Forecasting",
+        fontsize=16,
         fontweight="bold",
         color=PALETTE["text"],
-        y=0.985,
+        y=0.98,
+    )
+    plt.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=PALETTE["dark_bg"])
+    plt.close(fig)
+    print(f"✓ Saved → {save_path}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public entry-point — replaces the old monolithic plot_tearsheet
+# ─────────────────────────────────────────────────────────────────────────────
+def plot_tearsheets(
+    port_ret: pd.Series,
+    bench_ret: pd.Series,
+    metrics_port: dict,
+    metrics_bench: dict,
+    signal_z: pd.DataFrame,
+    weights: pd.DataFrame,
+    top_k: int,
+    rf_daily: float,
+    window: int = 252,
+    n_sims: int = 1000,
+    horizon_days: int = 504,
+    save_prefix: str = "tearsheet",
+):
+    """
+    Render three 16:9 tearsheets:
+      {save_prefix}_sheet1_performance.png
+      {save_prefix}_sheet2_risk.png
+      {save_prefix}_sheet3_portfolio.png
+    """
+    plot_sheet1(
+        port_ret,
+        bench_ret,
+        metrics_port,
+        metrics_bench,
+        rf_daily,
+        window=window,
+        save_path=f"{save_prefix}_sheet1_performance.png",
     )
 
-    plt.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=PALETTE["dark_bg"])
-    plt.show()
-    print(f"✓ Saved tearsheet → {save_path}")
+    plot_sheet2(port_ret, bench_ret, save_path=f"{save_prefix}_sheet2_risk.png")
+
+    plot_sheet3(
+        port_ret,
+        bench_ret,
+        signal_z,
+        weights,
+        top_k,
+        n_sims=n_sims,
+        horizon_days=horizon_days,
+        save_path=f"{save_prefix}_sheet3_portfolio.png",
+    )
