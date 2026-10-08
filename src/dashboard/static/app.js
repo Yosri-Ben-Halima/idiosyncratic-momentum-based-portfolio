@@ -108,7 +108,7 @@ function readConfig(){
 }
 function markPending(){
   const enabled=form.elements.sensitivity_enabled.checked;$('#grid-settings').hidden=!enabled;
-  for(const [name] of grid)form.elements[name].required=enabled;
+  for(const [name] of grid){form.elements[name].required=enabled;form.elements[name].disabled=!enabled;}
   let fingerprint;try{fingerprint=JSON.stringify(readConfig());}catch(e){fingerprint='invalid';}
   const changed=state.result&&(fingerprint!==state.completedFingerprint||state.bootstrap.snapshot?.id!==state.completedSnapshot);
   $('#pending').textContent=changed?'● Changes not run':state.result?'✓ Displaying these settings':'Ready to run';$('#pending').classList.toggle('changed',!!changed);
