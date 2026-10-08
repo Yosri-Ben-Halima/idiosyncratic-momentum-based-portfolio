@@ -1,5 +1,8 @@
 version: "3"
 
+vars:
+  PYTHON: '{{default "python" .PYTHON}}'
+
 tasks:
 
   install:
@@ -8,10 +11,38 @@ tasks:
       # generate requirements.txt using pipreqs (overwrite if exists)
       # - pipreqs . --force
       # install all dependencies
-      - pip install -r requirements.txt
+      - '"{{.PYTHON}}" -m pip install -r requirements.txt'
 
   run:
     desc: "Run the main script to execute the backtesting pipeline"
     # deps: [install]
     cmds:
-      - python main.py
+      - '"{{.PYTHON}}" main.py {{.CLI_ARGS}}'
+
+  backtest:
+    desc: "Backtest through the supplied exclusive END_DATE and save results"
+    requires:
+      vars: [END_DATE]
+    vars:
+      OUTPUT_DIR: '{{default "results/latest" .OUTPUT_DIR}}'
+    cmds:
+      - '"{{.PYTHON}}" main.py --end-date "{{.END_DATE}}" --output-dir "{{.OUTPUT_DIR}}" {{.CLI_ARGS}}'
+
+  sensitivity:
+    desc: "Plot window/cutoff sensitivity using a saved backtest price snapshot"
+    vars:
+      SOURCE: '{{default "results/latest" .SOURCE}}'
+    cmds:
+      - '"{{.PYTHON}}" -m src.sensitivity --source "{{.SOURCE}}" {{.CLI_ARGS}}'
+
+  test:
+    desc: "Run the project's regression tests"
+    cmds:
+      - '"{{.PYTHON}}" -m unittest discover -s tests -v'
+
+  dashboard:
+    desc: "Launch the localhost interactive research dashboard"
+    vars:
+      PORT: '{{default "8000" .PORT}}'
+    cmds:
+      - '"{{.PYTHON}}" -m src.dashboard --port "{{.PORT}}" {{if .SOURCE}}--source "{{.SOURCE}}"{{end}} {{.CLI_ARGS}}'

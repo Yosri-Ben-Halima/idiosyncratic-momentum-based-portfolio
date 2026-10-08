@@ -138,6 +138,14 @@ celerybeat.pid
 .env
 .envrc
 .venv
+.venv312/
+results/**/prices.csv
+results/**/weights.csv
+results/**/integration_verification/
+results/**/sensitivity_verification/
+results/**/risk_verification/
+results/dashboard/
+results/dashboard_verification/
 env/
 venv/
 ENV/
@@ -206,3 +214,5 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 .vscode/
+/results/
+/.gstack/qa-reports/

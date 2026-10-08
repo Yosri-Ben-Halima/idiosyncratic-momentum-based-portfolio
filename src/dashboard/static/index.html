@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Residual / Lab — Strategy research</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/plotly.js" defer></script><script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Residual Lab home">RESIDUAL <span>/ LAB</span><i>RESEARCH WORKSPACE</i></a>
+    <div class="top-actions"><span id="snapshot-badge" class="data-badge">Loading data source…</span><span id="run-status" class="status">Ready</span><button id="export" class="button secondary" disabled>↗ Export PNG</button></div>
+  </header>
+  <button id="controls-toggle" class="button mobile-toggle" aria-controls="sidebar" aria-expanded="false">☷ Parameters</button>
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-title"><span class="eyebrow">MODEL CONFIGURATION</span><h2>Strategy parameters</h2><p>Adjust the signal. Explore the outcome.</p></div>
+    <form id="parameters">
+      <div id="primary-controls"></div>
+      <fieldset class="period"><legend>Backtest period</legend><div class="dates"><label>Start<input type="date" name="start_date" required></label><label>End · exclusive<input type="date" name="end_date" required></label></div></fieldset>
+      <details class="advanced"><summary>Advanced settings <span>＋</span></summary><div id="advanced-controls"></div></details>
+      <label class="switch-row"><span>Include sensitivity<small>Scan a grid of parameter settings</small></span><input type="checkbox" name="sensitivity_enabled" role="switch"></label>
+      <details id="grid-settings" class="advanced" hidden><summary>Sensitivity grid <span>＋</span></summary><div id="grid-controls"></div><p id="grid-preview" class="hint"></p></details>
+      <div class="run-actions"><button id="run" class="button primary" type="submit">▶ <span>Run backtest</span></button><button id="reset" class="button secondary" type="button">↺ Reset to snapshot</button><p id="pending" class="pending">Ready to run</p></div>
+    </form>
+    <div class="source-card"><span class="eyebrow">MARKET DATA</span><p id="source-info">Looking for saved prices…</p><button id="refresh" class="text-button">↻ Refresh data for these dates</button><small>Saved prices stay fixed until you refresh.</small></div>
+  </aside>
+  <main>
+    <div class="workspace-heading"><div><span class="eyebrow">IDIOSYNCRATIC MOMENTUM</span><h1>A clearer view of your edge<span>.</span></h1><p id="result-context">One strategy. Every angle.</p></div><div class="model-tag">CAPM RESIDUALS <span>↗</span></div></div>
+    <div id="message" class="message" role="alert" hidden></div>
+    <div id="progress" class="progress-card" role="status" aria-live="polite" hidden><div class="progress-top"><span class="spinner"></span><strong id="stage">Computing</strong><span id="elapsed">0s</span></div><div class="progress-track"><span></span></div><p>Your last completed results remain visible while the engine runs.</p></div>
+    <section id="kpis" class="kpis" aria-label="Performance summary"></section>
+    <nav class="tabs" aria-label="Dashboard views" role="tablist"><button role="tab" aria-selected="true" data-tab="performance">Performance</button><button role="tab" aria-selected="false" data-tab="risk">Risk</button><button role="tab" aria-selected="false" data-tab="portfolio">Portfolio</button><button role="tab" aria-selected="false" data-tab="sensitivity">Sensitivity <span class="tab-dot"></span></button></nav>
+    <section id="empty" class="empty-state"><div class="empty-art"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><span class="eyebrow">YOUR NEXT EXPERIMENT STARTS HERE</span><h2>From signal to conviction.</h2><p>Choose your parameters and run a backtest to explore performance, portfolio risk, and the shape of your strategy.</p><div class="empty-pills"><span>↗ Benchmark comparisons</span><span>▥ Risk diagnostics</span><span>◇ 3D sensitivity</span></div><button id="empty-run" class="button primary">Run with current settings →</button><small>The computation engine runs locally on your machine.</small></section>
+    <section id="dashboard" hidden><div id="charts" class="chart-grid"></div><div id="tables"></div></section>
+    <section id="sensitivity" hidden>
+      <div id="sensitivity-empty" class="empty-state compact"><span class="eyebrow">EXPLORE THE PARAMETER LANDSCAPE</span><h2>Look beyond one setting.</h2><p>Enable sensitivity in the sidebar, choose a grid, and run again to see return, holdings, diversification, and concentration surfaces.</p><button id="enable-grid" class="button secondary">Enable sensitivity →</button></div>
+      <div id="surface-content" hidden>
+        <article class="chart-card surface-card"><div class="card-header"><div><h2>Parameter sensitivity</h2><p id="surface-subtitle">Measured settings · unsmoothed surface</p></div><div class="surface-controls"><label class="sr-only" for="surface-metric">Surface metric</label><select id="surface-metric"><option value="Sharpe">Sharpe</option><option value="Calmar">Calmar</option><option value="Total Return">Total return</option><option value="CAGR">CAGR</option><option value="Vol">Realized volatility</option><option value="Max DD">Drawdown loss</option><option value="mean_holdings">Average holdings</option><option value="risk_diversification_ratio">Diversification ratio</option><option value="risk_top_share">Top-stock risk share</option><option value="risk_effective_contributors">Effective risk contributors</option></select><label class="sr-only" for="surface-period">Diagnostic period</label><select id="surface-period"><option value="full">Full period</option><option value="early">Early period</option><option value="recent">Recent period</option></select></div></div><div id="main-surface" class="surface"></div><div class="chart-note"><span class="amber-dot"></span>Current run settings <span>Drag to rotate · scroll to zoom · hover for values</span></div></article>
+        <div class="chart-grid"><article class="chart-card"><div class="card-header"><div><h2>Risk concentration</h2><p>Mean top-stock share of absolute risk</p></div></div><div id="risk-surface" class="surface small"></div></article><article class="chart-card"><div class="card-header"><div><h2>Holdings landscape</h2><p>Average stocks held, including cash days</p></div></div><div id="holdings-heatmap" class="chart"></div></article></div>
+        <div id="stability" class="insight-card"></div>
+      </div>
+    </section>
+    <section id="downloads" class="downloads" hidden><h2>Completed run exports</h2><div id="download-links"></div></section>
+    <details id="run-details" class="run-details" hidden><summary>Run details & methodology</summary><div id="run-detail-content"></div><p>Exploratory backtest using current constituents, fixed equal target weights, incomplete trading costs, and a price-only S&amp;P 500 benchmark. Risk concentration uses normalized absolute Euler contributions; effective contributors are not independent factor bets. DD/CAGR is a recovery heuristic, not an observed recovery time.</p></details>
+    <footer><span>RESIDUAL / LAB</span><span>Local computation. Reproducible research.</span><span id="footer-source">YAHOO FINANCE SNAPSHOT</span></footer>
+  </main>
+</body></html>
