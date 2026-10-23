@@ -10,6 +10,7 @@ import uuid
 from src.engine import run_backtest
 from src.engine.exports import export_result
 from src.engine.snapshots import refresh_snapshot
+from src.engine.audit import run_audit
 from .charts import build_dashboard_payload
 
 
@@ -51,7 +52,7 @@ class JobManager:
                 progress('Building interactive dashboard')
                 payload = build_dashboard_payload(result)
                 with self.lock:
-                    job.update(result=result,payload=payload)
+                    job.update(result=result,payload=payload,snapshot=snapshot)
             elif job['kind']=='refresh':
                 fresh = refresh_snapshot(job['config'],self.root,progress)
                 if self.on_refresh:
@@ -63,6 +64,13 @@ class JobManager:
                 with self.lock:
                     self.jobs[job['parent']]['files'] = files
                     job['files'] = list(files)
+            elif job['kind']=='audit':
+                original = self.result(job['parent'])
+                with self.lock:
+                    frozen = self.jobs[job['parent']]['snapshot']
+                audit = run_audit(frozen,original,progress)
+                with self.lock:
+                    self.jobs[job['parent']]['audit'] = audit
             else:
                 raise ValueError('Unknown job type')
             with self.lock:
@@ -74,6 +82,8 @@ class JobManager:
             with self.lock:
                 completed = [j for j in self.jobs.values() if j['state'] in ('succeeded','failed')]
                 protected = {j['parent'] for j in self.jobs.values() if j['state'] in ('queued','running')}
+                # Keep the just-produced child artifact readable by the next request.
+                protected.add(job.get('parent'))
                 for old in completed[:-8]:
                     if old['id'] in protected:
                         continue
@@ -84,7 +94,7 @@ class JobManager:
     def status(self,identifier):
         with self.lock:
             job = self.jobs[identifier]
-            safe = {k:deepcopy(v) for k,v in job.items() if k not in ('key','result','payload','files')}
+            safe = {k:deepcopy(v) for k,v in job.items() if k not in ('key','result','payload','files','snapshot','audit')}
             if job['state']=='running':
                 safe['elapsed'] = time.time()-job['started']
             if isinstance(job.get('files'),list):

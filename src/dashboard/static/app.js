@@ -1,7 +1,7 @@
 'use strict';
 const $ = selector => document.querySelector(selector);
 const form = $('#parameters');
-const state = {bootstrap:null, result:null, runId:null, tab:'performance', active:false, completedFingerprint:null, completedSnapshot:null};
+const state = {bootstrap:null, result:null, runId:null, audit:null, tab:'performance', active:false, completedFingerprint:null, completedSnapshot:null};
 const escapeText = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pct = value => value == null ? 'N/A' : `${(value*100).toLocaleString(undefined,{maximumFractionDigits:1})}%`;
 const ratio = value => value == null ? 'N/A' : value.toLocaleString(undefined,{maximumFractionDigits:2,minimumFractionDigits:2});
@@ -120,7 +120,7 @@ async function api(path,body){
   const response=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await response.json();if(!response.ok)throw Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data;
 }
-function setBusy(value){state.active=value;$('#progress').hidden=!value;for(const id of ['run','refresh','empty-run'])$('#'+id).disabled=value;$('#export').disabled=value||!state.result;$('#run-status').classList.toggle('busy',value);$('#run-status').textContent=value?'Computing':state.result?'Run complete':'Ready';}
+function setBusy(value){state.active=value;$('#progress').hidden=!value;for(const id of ['run','refresh','empty-run'])$('#'+id).disabled=value;$('#export').disabled=value||!state.result;$('#audit-run').disabled=value||!state.result;$('#audit-download').disabled=value||!state.audit;$('#run-status').classList.toggle('busy',value);$('#run-status').textContent=value?'Computing':state.result?'Run complete':'Ready';}
 async function waitForJob(job){
   for(;;){
     $('#stage').textContent=job.stage;$('#elapsed').textContent=`${Math.round(job.elapsed||0)}s`;
@@ -138,7 +138,7 @@ async function run(){
   try{
     const job=await api('/api/runs',cfg);await waitForJob(job);
     const result=await api('/api/runs/'+job.id+'/results');
-    state.result=result;state.runId=job.id;state.completedFingerprint=fingerprint;state.completedSnapshot=snapshot;
+    state.result=result;state.runId=job.id;state.audit=null;state.completedFingerprint=fingerprint;state.completedSnapshot=snapshot;
     $('#downloads').hidden=true;renderResult();
     if(result.warnings.length)notice(result.warnings.join(' '),true);
   }catch(e){notice(e.message);}finally{setBusy(false);markPending();}
@@ -157,6 +157,12 @@ $('#export').addEventListener('click',async()=>{
   const id=state.runId;if(!id||state.active)return;
   try{setBusy(true);notice('');const job=await waitForJob(await api('/api/runs/'+id+'/exports',{}));const links=$('#download-links');links.replaceChildren();for(const name of job.files.filter(x=>x.endsWith('.png')||x.endsWith('.zip'))){const a=document.createElement('a');a.className='button secondary';a.href='/api/runs/'+id+'/files/'+encodeURIComponent(name);a.textContent=name==='results.zip'?'↓ All results · ZIP':'↓ '+name.replace('tearsheet_','').replace('.png','').replaceAll('_',' ');a.download=name;links.append(a);}$('#downloads').hidden=false;$('#downloads').scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){notice(e.message);}finally{setBusy(false);}
 });
+$('#audit-run').addEventListener('click',async()=>{
+  const id=state.runId;if(!id||state.active)return;
+  try{setBusy(true);notice('');await waitForJob(await api('/api/runs/'+id+'/audit',{}));const report=await api('/api/runs/'+id+'/audit');if(state.runId===id){state.audit=report;if(state.tab==='audit')AuditView.render(state.result,state.audit,true);}}
+  catch(e){notice('Audit could not finish: '+e.message);}finally{setBusy(false);}
+});
+$('#audit-download').addEventListener('click',()=>AuditView.download(state.audit));
 function renderKpis(){
   const metrics=state.result?.metrics;
   $('#kpis').innerHTML=[['Total return','Total Return'],['CAGR','CAGR'],['Sharpe','Sharpe'],['Max drawdown','Max DD']].map(([label,key])=>{
@@ -176,7 +182,8 @@ function renderResult(){
 }
 function table(title,headers,rows){return `<article class="table-card"><h2>${escapeText(title)}</h2><table><thead><tr>${headers.map(x=>`<th scope="col">${escapeText(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map((x,i)=>`<td class="${i===1?'strategy-cell':i===2?'benchmark-cell':''}">${escapeText(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></article>`;}
 function renderTab(){
-  const r=state.result;$('#dashboard').hidden=!r||state.tab==='sensitivity';$('#sensitivity').hidden=state.tab!=='sensitivity';$('#empty').hidden=!!r||state.tab==='sensitivity';
+  const r=state.result;$('#dashboard').hidden=!r||['sensitivity','audit'].includes(state.tab);$('#sensitivity').hidden=state.tab!=='sensitivity';$('#audit').hidden=state.tab!=='audit';$('#empty').hidden=!!r||['sensitivity','audit'].includes(state.tab);
+  if(state.tab==='audit'){AuditView.render(r,state.audit,state.active);return;}
   if(state.tab==='sensitivity'){renderSensitivity();return;}if(!r)return;
   const charts=$('#charts');for(const el of charts.querySelectorAll('.chart'))Plotly.purge(el);charts.replaceChildren();
   for(const data of r.figures[state.tab]){
@@ -226,7 +233,7 @@ function renderSensitivity(){
 }
 $('#surface-metric').addEventListener('change',updateMainSurface);$('#surface-period').addEventListener('change',updateMainSurface);
 let resizeTimer;
-window.addEventListener('resize',()=>{syncSidebar();clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{for(const el of document.querySelectorAll('.js-plotly-plot')){if(el.clientWidth&&el.clientHeight)Plotly.relayout(el,{width:el.clientWidth,height:el.clientHeight});}},120);});
+window.addEventListener('resize',()=>{syncSidebar();clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{for(const el of document.querySelectorAll('.js-plotly-plot')){if(el.clientWidth&&el.clientHeight)Plotly.relayout(el,{width:el.clientWidth,height:el.clientHeight});}if(state.tab==='audit')AuditView.resize();},120);});
 async function bootstrap(reset=true){
   const b=await api('/api/bootstrap');state.bootstrap=b;const snap=b.snapshot;
   $('#snapshot-badge').textContent=snap?'Data through '+snap.last_price:'No saved data';

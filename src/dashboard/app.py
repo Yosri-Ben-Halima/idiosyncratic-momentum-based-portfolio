@@ -111,6 +111,30 @@ def create_app(source=None,results_root=Path('results')):
         except ValueError as error:
             raise HTTPException(409,str(error)) from error
 
+    @app.post('/api/runs/{identifier}/audit',status_code=202)
+    def audit_run(identifier:str):
+        try:
+            original = manager.result(identifier)
+            return manager.submit('audit',original.config,parent=identifier)
+        except KeyError:
+            raise HTTPException(404,'Unknown or expired run') from None
+        except ValueError as error:
+            raise HTTPException(409,str(error)) from error
+
+    @app.get('/api/runs/{identifier}/audit')
+    def audit_report(identifier:str):
+        try:
+            manager.result(identifier)
+            with manager.lock:
+                report = manager.jobs[identifier].get('audit')
+            if report is None:
+                raise ValueError('Run the audit for this completed backtest first')
+            return report
+        except KeyError:
+            raise HTTPException(404,'Unknown or expired run') from None
+        except ValueError as error:
+            raise HTTPException(409,str(error)) from error
+
     @app.get('/api/runs/{identifier}/files/{filename}')
     def download(identifier:str,filename:str):
         try:
