@@ -1,0 +1,1 @@
+# One ticker per line, manually reviewed and approved. Use # for the reason.

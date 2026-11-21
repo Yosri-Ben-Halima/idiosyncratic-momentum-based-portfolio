@@ -62,6 +62,7 @@ def _monthly_matrix(rets):
     df["year"] = df.index.year
     df["month"] = df.index.month
     pivot = df.pivot(index="year", columns="month", values="ret")
+    pivot = pivot.reindex(columns=range(1, 13))
     pivot.columns = [
         "Jan",
         "Feb",
@@ -406,7 +407,8 @@ def plot_sheet2(port_ret, bench_ret, save_path="sheet2_risk.png"):
             rets * 100, bins=80, alpha=0.4, color=color, density=True, label=label
         )
         x = np.linspace(rets.min() * 100, rets.max() * 100, 300)
-        ax_hist.plot(x, stats.norm.pdf(x, mu * 100, sigma * 100), color=color, lw=1.5)
+        if sigma > 0:
+            ax_hist.plot(x, stats.norm.pdf(x, mu * 100, sigma * 100), color=color, lw=1.5)
     ax_hist.axvline(0, color=PALETTE["neutral"], lw=0.8, linestyle="--")
     ax_hist.set_title("Return Distribution", fontsize=11, fontweight="bold")
     ax_hist.set_xlabel("Daily Return (%)")
@@ -547,6 +549,7 @@ def plot_sheet3(
     n_sims=1000,
     horizon_days=504,
     save_path="sheet3_portfolio.png",
+    simulation=None,
 ):
     set_dark_style()
     fig = plt.figure(figsize=(28, 15.75), facecolor=PALETTE["dark_bg"])
@@ -659,26 +662,13 @@ def plot_sheet3(
     ax_fan = fig.add_subplot(gs2[0])
     ax_ter = fig.add_subplot(gs2[1])
 
-    BLOCK_SIZE = 21
+    from src.engine.diagnostics import monte_carlo
     returns_arr = port_ret.dropna().values
-    n_hist = len(returns_arr)
-    np.random.seed(42)
-    sim_cum = np.zeros((n_sims, horizon_days))
-    for i in range(n_sims):
-        path = []
-        while len(path) < horizon_days:
-            start = np.random.randint(0, n_hist - BLOCK_SIZE)
-            path.extend(returns_arr[start : start + BLOCK_SIZE].tolist())
-        sim_cum[i] = np.cumprod(1 + np.array(path[:horizon_days])) - 1
-
+    simulation = simulation if simulation is not None else monte_carlo(port_ret, n_sims, horizon_days, 42)
     last_date = port_ret.dropna().index[-1]
-    future_dates = pd.bdate_range(
-        start=last_date + pd.Timedelta(days=1), periods=horizon_days
-    )
-    horizon_days_bd = len(future_dates)
-    sim_cum = sim_cum[:, :horizon_days_bd]
+    future_dates = simulation["dates"]
     pcts = [1, 5, 25, 50, 75, 95, 99]
-    bands = {p: np.percentile(sim_cum, p, axis=0) for p in pcts}
+    bands = simulation["bands"]
     actual_cum = np.cumprod(1 + returns_arr) - 1
 
     ax_fan.plot(
@@ -729,7 +719,7 @@ def plot_sheet3(
             fontsize=7.5,
             va="center",
         )
-    prob_pos = (sim_cum[:, -1] > 0).mean()
+    prob_pos = (simulation["terminal"] > 0).mean()
     ax_fan.text(
         0.02,
         0.78,
@@ -758,10 +748,13 @@ def plot_sheet3(
     ax_fan.legend(fontsize=8)
     _polish(ax_fan)
 
-    ter_pct = sim_cum[:, -1] * 100
-    kde_ter = stats.gaussian_kde(ter_pct, bw_method="scott")
+    ter_pct = simulation["terminal"] * 100
     x_ter = np.linspace(ter_pct.min(), ter_pct.max(), 500)
-    y_ter = kde_ter(x_ter)
+    if np.std(ter_pct) > 1e-12:
+        y_ter = stats.gaussian_kde(ter_pct, bw_method="scott")(x_ter)
+    else:
+        y_ter = np.zeros_like(x_ter)
+        ax_ter.text(.5, .5, "Constant simulated outcome", transform=ax_ter.transAxes, ha="center")
     ax_ter.hist(ter_pct, bins=60, color=PALETTE["neutral"], alpha=0.25, density=True)
     ax_ter.plot(x_ter, y_ter, color=PALETTE["benchmark"], lw=2)
     ax_ter.fill_between(
@@ -841,12 +834,16 @@ def plot_tearsheets(
     n_sims: int = 1000,
     horizon_days: int = 504,
     save_prefix: str = "tearsheet",
+    sensitivity_result=None,
+    simulation=None,
 ):
     """
-    Render three 16:9 tearsheets:
+    Render three 16:9 tearsheets, plus sensitivity when supplied:
       {save_prefix}_sheet1_performance.png
       {save_prefix}_sheet2_risk.png
       {save_prefix}_sheet3_portfolio.png
+      {save_prefix}_sheet4_sensitivity.png
+      {save_prefix}_sheet5_risk_concentration.png
     """
     plot_sheet1(
         port_ret,
@@ -869,4 +866,10 @@ def plot_tearsheets(
         n_sims=n_sims,
         horizon_days=horizon_days,
         save_path=f"{save_prefix}_sheet3_portfolio.png",
+        simulation=simulation,
     )
+    if sensitivity_result is not None:
+        from src.sensitivity.plots import plot_risk_sheet, plot_sensitivity_sheet
+        plot_sensitivity_sheet(sensitivity_result, f"{save_prefix}_sheet4_sensitivity.png")
+        if "risk_diversification_ratio" in sensitivity_result.grid:
+            plot_risk_sheet(sensitivity_result, f"{save_prefix}_sheet5_risk_concentration.png")

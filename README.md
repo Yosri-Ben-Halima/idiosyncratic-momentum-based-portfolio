@@ -10,6 +10,51 @@ A quantitative trading system that constructs and backtests a long-only portfoli
 - [Code Repository Walkthrough](#code-repository-walkthrough)
 - [Setup and Configuration](#setup-and-configuration)
 - [Commands & Usage](#commands--usage)
+- [Local dashboard](#local-dashboard)
+
+## Local dashboard
+
+Choose the existing PNG workflow or launch **Residual / Lab**, the localhost research dashboard. Both call the same computation engine. The dashboard uses the approved dark navy/teal design, with interactive performance, risk, portfolio, and sensitivity views.
+
+With the project's Python 3.12 environment:
+
+```powershell
+uv pip install --python .venv312/Scripts/python.exe -r requirements.txt
+task dashboard PYTHON=.venv312/Scripts/python.exe SOURCE=results/2026-10-06 CLI_ARGS=--open
+```
+
+Or launch directly:
+
+```powershell
+.venv312/Scripts/python.exe -m src.dashboard --source results/2026-10-06 --port 8000 --open
+```
+
+Open **http://127.0.0.1:8000**. Omit `--source` / `SOURCE` to discover the newest usable saved snapshot under `results/`. Use another `--port` / `PORT` if 8000 is occupied. The app binds to loopback only. To create an environment from scratch, run `uv venv --python 3.12 .venv312` first; ordinary Python 3.12 environments with `python -m pip install -r requirements.txt` also work.
+
+**PNG mode remains available:**
+
+```powershell
+task backtest PYTHON=.venv312/Scripts/python.exe END_DATE=2026-10-08 OUTPUT_DIR=results/latest
+```
+
+Dashboard operation:
+
+- Use synchronized sliders and numeric inputs for the momentum window, cutoff, and maximum holdings; date pickers for the period; frequency and simulation presets in dropdowns; and advanced numeric fields for costs, risk estimation, and simulation settings. The annual risk-free-rate field is a percentage; costs are basis points.
+- Click **Run backtest** to submit settings. Changing a control marks the displayed result as outdated and does not run on every slider movement. Previous results stay visible while a new computation runs, including after a failed run.
+- **Include sensitivity** enables a configurable window × cutoff grid. Explore filled rotatable surfaces for Sharpe, Calmar, total return, CAGR, volatility, drawdown loss, holdings, diversification, top-stock risk share, and effective risk contributors. Period controls apply to performance metrics; holdings/risk means cover the full period.
+- **Export PNG** renders the completed run's three tearsheets, or five when sensitivity is enabled. Download individual PNGs or a ZIP with CSVs and provenance. Edits not yet run never change an export. The simulation seed and computed Monte Carlo arrays are shared across the dashboard and PNG output.
+- **Audit** challenges the completed run using its frozen prices and settings. Click **Run audit** to replay it, change/remove future prices after the evaluation midpoint, and compare earlier signals, holdings and returns. A timeline explains the information window; evidence cards separate checked timing from numerical issues and untested historical assumptions. Cash-only or very short histories produce insufficient timing evidence.
+- Audit comparisons measure the original result against holding shares between rebalances, matching stock/market observations in CAPM estimation, and setting the constant risk-free rate to zero. These are isolated diagnostics; the production strategy and PNGs remain unchanged. Gain attribution includes other stocks and trading costs to reconcile with total return. **Evidence JSON** downloads exact measurements, completed-run settings, snapshot identity, cutoff, seed and method version. Audits share the local computation queue and can take several backtest replays; repeated audits of the same completed run are cached.
+- Saved prices and chart assets work offline. **Refresh data for these dates** explicitly downloads a new immutable snapshot and refreshes the risk-free-rate default. It preserves earlier snapshots/results. After refresh, **Reset to snapshot** adopts refreshed defaults; run again to use new data. Download failures retain the previous source.
+- End dates are **exclusive**. Runs cannot extend beyond observed snapshot coverage; the next business day after the last price is accepted to accommodate trailing weekends. An exchange holiday may require setting an earlier end date. Requested download cutoffs and actual coverage are recorded separately.
+
+The worker runs one computation at a time, with at most two waiting jobs and eight completed jobs retained in memory. Identical completed runs are cached using all parameters and snapshot identity; explicit refreshes always fetch again after the previous refresh finishes. Generated snapshots and export bundles are retained on disk in ignored `results/dashboard/` for reproducibility; remove old outputs when no longer needed. Job IDs expire after eviction or server restart.
+
+Practical limits: at most 225 sensitivity combinations; momentum/risk windows up to 756 sessions; 100–20,000 Monte Carlo paths, 21–1,260 horizon sessions, and at most 12,600,000 path-session cells. The interface and backend enforce these limits. A broader grid and longer history require more computation. Limited warmup and undefined risk values appear as warnings or N/A.
+
+The benchmark remains the **price-only S&P 500 index**. This feature preserves the existing current-constituent universe, fixed equal target weights, signal, execution and trading-cost assumptions. DD/CAGR is a rough recovery heuristic. Sensitivity is exploratory rather than independent validation; effective risk contributors are not independent factor bets.
+
+Verification uses `task test PYTHON=.venv312/Scripts/python.exe`. Browser QA can additionally use Playwright, installed separately; it is not required to run the dashboard.
 
 ---
 
@@ -287,9 +332,24 @@ min_history: 300                      # Minimum days of data per stock
 transaction_cost_bps: 20              # 20 basis points = 0.20%
 monte_carlo_runs: 10000               # MC simulation count
 monte_carlo_days: 504                 # MC simulation length (2 years)
+halal_filter: false                   # true = Shariah-compliant stocks only
+halal_standard: "aaoifi"              # "aaoifi" or "wahed" (FTSE Shariah / Wahed HLAL)
 ```
 
 Modify these values in `config.yaml` to tune the strategy.
+
+### Halal filter
+
+Set `halal_filter: true` to restrict the universe to Shariah-compliant S&P 500 stocks before prices are fetched. `halal_standard` picks the rules:
+
+| Standard | Debt / cash tests | Income test |
+| -------- | ----------------- | ----------- |
+| `aaoifi` | each < 30% of market cap (current and 12-month average) | interest < 5% of revenue |
+| `wahed` | each < 33.333% of total assets; receivables + cash < 50% of total assets | ≤ 5% of revenue |
+
+Both standards exclude the Financial Services sector, banks, insurers, brewers and distillers, tobacco, gambling and casinos, and grey areas (defense, hotels, entertainment, restaurants), based on Yahoo industry labels. Companies whose label hides a prohibited line (e.g. pork in "Packaged Foods", alcohol at discount stores) are not caught; review them by hand. Compliance comes from the latest `data/snapshot_<date>.csv`; refresh it monthly with `python -m halal_screener refresh` (about 10 minutes). Add manually reviewed tickers to `data/allowlist.txt`. Compare the two standards with `python -m halal_screener compare`.
+
+Note: today's compliance is applied to the whole backtest window, which is a look-ahead bias, as is using today's S&P 500 constituents.
 
 ---
 
@@ -319,6 +379,107 @@ task install
 # Run the full backtesting pipeline
 task run
 ```
+
+To refresh the backtest without changing the configured historical end date:
+
+```powershell
+task backtest END_DATE=2026-10-06 OUTPUT_DIR=results/2026-10-06
+# With the isolated Python environment used for this run:
+task backtest PYTHON=.venv312/Scripts/python.exe END_DATE=2026-10-06 OUTPUT_DIR=results/2026-10-06
+```
+
+`END_DATE` is exclusive: the example requests completed daily sessions through
+October 5, 2026. Always check `run_metadata.json` for the actual last available
+session. The output directory contains metrics, daily and annual returns, latest
+holdings, the configuration and universe snapshot, downloaded prices, daily
+weights, and five tearsheets. Raw prices and weights are kept locally and ignored
+by Git. Python 3.12 supports the pinned dependencies.
+
+Research limitations: the universe is today's S&P 500 membership, not historical
+membership; adjusted stock prices are compared with the price-only `^GSPC`
+benchmark; the current risk-free quote is applied to the entire history; and
+weights stay equal between monthly selections rather than drifting with prices.
+The configured `z_threshold: 2` is applied and can produce fewer than 30 holdings.
+Trading costs follow the existing half-L1 target-weight turnover formula and do
+not charge for maintaining equal weights between selections. These results are
+an exploratory backtest of the existing implementation.
+
+To reproduce the window/cutoff sensitivity study from saved data:
+
+```powershell
+task sensitivity PYTHON=.venv312/Scripts/python.exe SOURCE=results/2026-10-06
+```
+
+This tests 99 settings: nine windows from 126 to 378 trading days and eleven
+z-score cutoffs from 1 to 3, including closer steps around 252 days / cutoff 2.
+The window changes both CAPM estimation and residual aggregation, as in the
+existing strategy. All runs use the saved universe, prices, risk-free quote,
+cost convention, and identical evaluation dates. Outputs under `sensitivity/`
+include the grid CSV, full/early/recent metrics, 3D Sharpe, Calmar, total-return and average-holdings surfaces,
+heatmaps, and a standalone HTML plot with rotation and metric selection.
+The current setting must reproduce the previous daily returns before results
+are accepted. Period comparisons are exploratory diagnostics, not independent
+out-of-sample validation or an instruction to select the grid's maximum.
+
+Sensitivity is now a reusable module in `src/sensitivity`, and the main pipeline
+runs it by default using the same downloaded prices and risk-free quote. Its
+four surfaces appear in `tearsheet_sheet4_sensitivity.png`, matching the dark
+tearsheet theme. Total return is displayed in percent. The default grid adds
+several minutes to a backtest; customize `sensitivity.windows`,
+`sensitivity.cutoffs` and `sensitivity.split_date` in `src/environment/config.yaml`.
+The current window and cutoff are automatically included for baseline checks.
+Fresh downloads include enough warmup for the longest configured window.
+The holdings surface shows the mean count across every backtest session,
+including cash sessions as zero, rather than the latest holdings count.
+
+```powershell
+# Redraw existing grids and the fourth tearsheet without recomputing:
+task sensitivity PYTHON=.venv312/Scripts/python.exe SOURCE=results/2026-10-06 CLI_ARGS=--render-only
+# Run the three original tearsheets without the sensitivity grid:
+task run PYTHON=.venv312/Scripts/python.exe CLI_ARGS=--skip-sensitivity
+# Run the regression suite:
+task test PYTHON=.venv312/Scripts/python.exe
+```
+
+Library usage (no network calls):
+
+```python
+from src.sensitivity import run_sensitivity
+
+study = run_sensitivity(prices_with_warmup, tickers, config,
+                        windows=[231, 252, 273], cutoffs=[1.9, 2, 2.1],
+                        expected_returns=portfolio_returns)
+study.save("results/custom/sensitivity")
+```
+
+`config` includes the derived `rf_daily` and `cost_bps` values from `load_config`.
+All-cash settings retain undefined Sharpe/Calmar values as missing, rather than
+displaying them as zero. Saved JSON represents these values as `null`.
+
+The fifth page, `tearsheet_sheet5_risk_concentration.png`, compares correlation-aware
+diversification and single-stock risk concentration with realized volatility and
+drawdown across the same parameter grid. Covariance uses preceding returns only,
+refreshed monthly and when target weights change. Configure `risk_window` (252)
+and `risk_min_observations` (126) under `sensitivity`.
+
+- Diversification ratio: weighted average stock volatility divided by portfolio
+  volatility. Higher values indicate greater diversification benefit.
+- Top-stock risk share: largest normalized **absolute** Euler variance contribution,
+  accounting for volatility and covariances. Negative hedge contributions are
+  counted by magnitude and separately recorded in `risk_hedge_share`.
+- Effective risk contributors: inverse concentration of those absolute shares;
+  this is not a count of statistically independent bets.
+- Risk means exclude cash sessions and unavailable covariance estimates. The grid's
+  `risk_coverage` field reports coverage of invested sessions. This differs from
+  average holdings, which includes cash sessions as zero.
+
+Exports also include `risk_surfaces.png`, `risk_impact.png`, baseline daily risk
+metrics and latest per-stock risk contributions. The impact chart compares
+diversification with realized volatility/drawdown and capital weights with the
+latest estimated risk shares. These are descriptive associations, not causal
+estimates. Older grids must be recomputed once to add risk columns; subsequent
+`--render-only` runs reuse them. Methods and the current comparison are recorded
+in `results/2026-10-06/sensitivity/risk_findings.md`.
 
 **Pipeline Execution**:
 
