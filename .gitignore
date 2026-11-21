@@ -216,3 +216,5 @@ __marimo__/
 .vscode/
 /results/
 /.gstack/qa-reports/
+# Halal screener snapshots (regenerated monthly: python -m halal_screener refresh)
+data/snapshot_*.csv

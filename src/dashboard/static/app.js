@@ -65,6 +65,7 @@ function fillDefaults(){
   const cfg=state.bootstrap.defaults, s=cfg.sensitivity||{};
   for(const [key,value] of Object.entries(cfg))if(form.elements[key])form.elements[key].value=key==='rf_annual'?value*100:value;
   form.elements.sensitivity_enabled.checked=!!s.enabled;
+  form.elements.halal_filter.checked=!!cfg.halal_filter;form.elements.halal_standard.value=cfg.halal_standard||'aaoifi';
   for(const key of ['risk_window','risk_min_observations','split_date'])form.elements[key].value=s[key]??({risk_window:252,risk_min_observations:126,split_date:'2023-01-01'}[key]);
   const windows=s.windows||[126,252,378],cutoffs=s.cutoffs||[1,2,3];
   const defaults={grid_window_min:Math.min(...windows),grid_window_max:Math.max(...windows),grid_window_step:42,grid_cutoff_min:Math.min(...cutoffs),grid_cutoff_max:Math.max(...cutoffs),grid_cutoff_step:.25};
@@ -97,6 +98,7 @@ function readConfig(){
     cfg[name]=name==='rebalance_freq'?form.elements[name].value:Number(form.elements[name].value);
   }
   cfg.rf_annual/=100;cfg.start_date=form.elements.start_date.value;cfg.end_date=form.elements.end_date.value;
+  cfg.halal_filter=form.elements.halal_filter.checked;cfg.halal_standard=form.elements.halal_standard.value;
   const s=cfg.sensitivity={enabled:form.elements.sensitivity_enabled.checked,risk_window:Number(form.elements.risk_window.value),risk_min_observations:Number(form.elements.risk_min_observations.value),split_date:form.elements.split_date.value};
   if(s.enabled){
     s.windows=axisValues(...['min','max','step'].map(key=>Number(form.elements['grid_window_'+key].value)));
@@ -108,6 +110,7 @@ function readConfig(){
 }
 function markPending(){
   const enabled=form.elements.sensitivity_enabled.checked;$('#grid-settings').hidden=!enabled;
+  $('#halal-standard-control').hidden=!form.elements.halal_filter.checked;
   for(const [name] of grid){form.elements[name].required=enabled;form.elements[name].disabled=!enabled;}
   let fingerprint;try{fingerprint=JSON.stringify(readConfig());}catch(e){fingerprint='invalid';}
   const changed=state.result&&(fingerprint!==state.completedFingerprint||state.bootstrap.snapshot?.id!==state.completedSnapshot);
@@ -172,7 +175,7 @@ function renderKpis(){
 }
 function renderResult(){
   renderKpis();const r=state.result;$('#empty').hidden=true;$('#run-details').hidden=false;
-  $('#result-context').textContent=`Completed: ${r.dates[0]} → ${r.dates[1]} · ${r.config.momentum_window} sessions / z > ${r.config.z_threshold} · ${r.observations.toLocaleString()} observations`;
+  $('#result-context').textContent=`Completed: ${r.dates[0]} → ${r.dates[1]} · ${r.config.momentum_window} sessions / z > ${r.config.z_threshold} · ${r.observations.toLocaleString()} observations${r.config.halal_filter?` · Halal: ${r.config.halal_standard==='wahed'?'Wahed / FTSE':'AAOIFI'}`:''}`;
   const detail=$('#run-detail-content');detail.replaceChildren();
   for(const text of [`Snapshot ${r.snapshot_id.slice(0,16)} · requested end ${r.config.end_date} (exclusive)`,
     `Maximum ${r.config.top_k} holdings · ${r.config.rebalance_freq} · ${r.config.transaction_cost_bps} bps costs · ${pct(r.config.rf_annual)} annual risk-free rate`,

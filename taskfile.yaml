@@ -38,7 +38,7 @@ tasks:
   test:
     desc: "Run the project's regression tests"
     cmds:
-      - '"{{.PYTHON}}" -m unittest discover -s tests -v'
+      - '"{{.PYTHON}}" -m pytest tests -v'
 
   dashboard:
     desc: "Launch the localhost interactive research dashboard"

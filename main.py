@@ -12,6 +12,7 @@ from src.engine.exports import export_result
 from src.environment import load_config
 from src.sensitivity import resolve_grid
 from src.sensitivity.plots import render_sensitivity
+from utils.halal_helper import filter_halal
 from utils.tick_helper import get_sp500_tickers
 from src.visualizations import fmt_pct
 
@@ -45,6 +46,8 @@ def main():
 
     # ── Fetch data from fetch_start ───────────────────────────────────────────
     tickers = get_sp500_tickers()
+    if CFG.get("halal_filter", False):
+        tickers = filter_halal(tickers, CFG.get("halal_standard", "aaoifi"))
     prices = fetch_prices(tickers, fetch_start, CFG["end_date"])
     if prices.empty or "^GSPC" not in prices or prices["^GSPC"].dropna().empty:
         raise RuntimeError("No usable benchmark prices downloaded; backtest cannot run.")

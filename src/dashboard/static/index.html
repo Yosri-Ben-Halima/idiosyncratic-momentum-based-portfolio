@@ -20,6 +20,8 @@
       <div id="primary-controls"></div>
       <fieldset class="period"><legend>Backtest period</legend><div class="dates"><label>Start<input type="date" name="start_date" required></label><label>End · exclusive<input type="date" name="end_date" required></label></div></fieldset>
       <details class="advanced"><summary>Advanced settings <span>＋</span></summary><div id="advanced-controls"></div></details>
+      <label class="switch-row"><span>Halal filter<small>Shariah-compliant stocks only</small></span><input type="checkbox" name="halal_filter" role="switch"></label>
+      <div id="halal-standard-control" class="control" hidden><label for="halal_standard">Shariah standard</label><select id="halal_standard" name="halal_standard"><option value="aaoifi">AAOIFI · debt vs market cap</option><option value="wahed">Wahed / FTSE · debt vs assets</option></select><small class="help">Uses today's screen for the whole period (look-ahead).</small></div>
       <label class="switch-row"><span>Include sensitivity<small>Scan a grid of parameter settings</small></span><input type="checkbox" name="sensitivity_enabled" role="switch"></label>
       <details id="grid-settings" class="advanced" hidden><summary>Sensitivity grid <span>＋</span></summary><div id="grid-controls"></div><p id="grid-preview" class="hint"></p></details>
       <div class="run-actions"><button id="run" class="button primary" type="submit">▶ <span>Run backtest</span></button><button id="reset" class="button secondary" type="button">↺ Reset to snapshot</button><p id="pending" class="pending">Ready to run</p></div>

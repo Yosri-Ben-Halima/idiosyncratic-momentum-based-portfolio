@@ -7,6 +7,7 @@ from src.feature_engineering import build_idiosyncratic_momentum, zscore_normali
 from src.portfolio_construction import build_portfolio
 from src.sensitivity import run_sensitivity
 from src.sensitivity.risk import RiskDiagnostics
+from utils.halal_helper import filter_halal
 
 
 @dataclass
@@ -40,6 +41,10 @@ def run_backtest(snapshot, config, progress=None):
     cfg = deepcopy(config)
     prices = snapshot.prices.loc[snapshot.prices.index<pd.Timestamp(cfg['end_date'])]
     tickers = snapshot.tickers
+    if cfg.get('halal_filter',False):
+        tickers = filter_halal(tickers,cfg['halal_standard'])
+        if not tickers:
+            raise ValueError('No stock in this snapshot passes the halal filter')
     if '^GSPC' not in prices or prices['^GSPC'].dropna().empty:
         raise ValueError('No usable benchmark prices')
     report('Computing CAPM residuals and momentum')
@@ -66,6 +71,10 @@ def run_backtest(snapshot, config, progress=None):
          'SP500':performance_metrics(benchmark,benchmark,cfg['rf_daily'],'SP500')},
         signal.loc[ret.index],weights,risk.evaluate(weights),risk.latest_contributions(weights))
     result.provenance = {**snapshot.metadata,'snapshot_id':snapshot.id,'universe_used':tickers}
+    if cfg.get('halal_filter',False):
+        result.provenance['halal_standard'] = cfg['halal_standard']
+        result.warnings.append(f"Halal filter ({cfg['halal_standard'].upper()}): {len(tickers)} stocks, "
+            "screened on today's data and applied to the whole period (look-ahead).")
     warmup = len(prices.loc[prices.index<pd.Timestamp(cfg['start_date'])])
     if warmup<2*cfg['momentum_window']+cfg['momentum_skip']:
         result.warnings.append('Limited preceding price history: early signals may be unavailable.')

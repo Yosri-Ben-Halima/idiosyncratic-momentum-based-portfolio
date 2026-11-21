@@ -2,6 +2,7 @@
 from copy import deepcopy
 import math
 import pandas as pd
+from halal_screener.rules import STANDARDS
 from src.sensitivity import resolve_grid
 
 LIMITS = dict(momentum_window=(2,756), momentum_skip=(0,252), top_k=(1,503),
@@ -14,7 +15,7 @@ SENSITIVITY_KEYS = {'enabled','windows','cutoffs','split_date','risk_window','ri
 
 
 def normalize_config(values, defaults, snapshot=None):
-    allowed = set(LIMITS) | {'start_date','end_date','rebalance_freq','sensitivity'}
+    allowed = set(LIMITS) | {'start_date','end_date','rebalance_freq','sensitivity','halal_filter','halal_standard'}
     if set(values)-allowed:
         raise ValueError('Unknown parameters: '+', '.join(sorted(set(values)-allowed)))
     cfg = deepcopy(defaults)
@@ -38,6 +39,12 @@ def normalize_config(values, defaults, snapshot=None):
             raise ValueError(f'{field}: must be {"an integer " if field in INTEGER else ""}between {low} and {high}')
         if field in INTEGER:
             cfg[field] = int(number)
+    cfg.setdefault('halal_filter',False)
+    cfg.setdefault('halal_standard','aaoifi')
+    if not isinstance(cfg['halal_filter'],bool):
+        raise ValueError('halal_filter: must be a boolean')
+    if cfg['halal_standard'] not in STANDARDS:
+        raise ValueError('halal_standard: choose aaoifi or wahed')
     if cfg['rebalance_freq'] not in ('W-FRI','ME','QE'):
         raise ValueError('rebalance_freq: choose weekly, month end, or quarter end')
     try:

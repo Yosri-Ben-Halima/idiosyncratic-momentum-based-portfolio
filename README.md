@@ -332,9 +332,24 @@ min_history: 300                      # Minimum days of data per stock
 transaction_cost_bps: 20              # 20 basis points = 0.20%
 monte_carlo_runs: 10000               # MC simulation count
 monte_carlo_days: 504                 # MC simulation length (2 years)
+halal_filter: false                   # true = Shariah-compliant stocks only
+halal_standard: "aaoifi"              # "aaoifi" or "wahed" (FTSE Shariah / Wahed HLAL)
 ```
 
 Modify these values in `config.yaml` to tune the strategy.
+
+### Halal filter
+
+Set `halal_filter: true` to restrict the universe to Shariah-compliant S&P 500 stocks before prices are fetched. `halal_standard` picks the rules:
+
+| Standard | Debt / cash tests | Income test |
+| -------- | ----------------- | ----------- |
+| `aaoifi` | each < 30% of market cap (current and 12-month average) | interest < 5% of revenue |
+| `wahed` | each < 33.333% of total assets; receivables + cash < 50% of total assets | ≤ 5% of revenue |
+
+Both standards exclude the Financial Services sector, banks, insurers, brewers and distillers, tobacco, gambling and casinos, and grey areas (defense, hotels, entertainment, restaurants), based on Yahoo industry labels. Companies whose label hides a prohibited line (e.g. pork in "Packaged Foods", alcohol at discount stores) are not caught; review them by hand. Compliance comes from the latest `data/snapshot_<date>.csv`; refresh it monthly with `python -m halal_screener refresh` (about 10 minutes). Add manually reviewed tickers to `data/allowlist.txt`. Compare the two standards with `python -m halal_screener compare`.
+
+Note: today's compliance is applied to the whole backtest window, which is a look-ahead bias, as is using today's S&P 500 constituents.
 
 ---
 
