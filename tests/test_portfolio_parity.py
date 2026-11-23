@@ -128,6 +128,19 @@ def test_risk_evaluate_matches_original_loop(thr):
                                   pd.DataFrame(index=weights.index[:0], columns=RISK_FIELDS, dtype=float))
 
 
+@pytest.mark.parametrize("thr", [-3.0, 0.5])
+def test_risk_without_cache_matches_cached(thr):
+    prices, tickers, signal = market(7)
+    weights = build_portfolio(signal, prices, tickers, 6, "W-FRI", 40, thr).iloc[150:]
+    cached = RiskDiagnostics(prices, window=60, min_observations=30)
+    lean = RiskDiagnostics(prices, window=60, min_observations=30, keep_cache=False)
+    pd.testing.assert_frame_equal(lean.evaluate(weights), cached.evaluate(weights), check_exact=True)
+    contributions = lean.latest_contributions(weights)
+    pd.testing.assert_frame_equal(contributions, cached.latest_contributions(weights), check_exact=True)
+    assert contributions.attrs == cached.latest_contributions(weights).attrs
+    assert len(lean.cache) == 1 and len(cached.cache) > 1
+
+
 def test_zscore_matches_row_apply():
     _, _, signal = market(3)
     signal.iloc[5] = np.nan       # all-missing row

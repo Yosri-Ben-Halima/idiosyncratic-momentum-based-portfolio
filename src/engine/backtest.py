@@ -64,7 +64,7 @@ def run_backtest(snapshot, config, progress=None):
     report('Measuring portfolio risk contributions')
     options = cfg.get('sensitivity',{})
     risk = RiskDiagnostics(prices[tickers],options.get('risk_window',252),
-                           options.get('risk_min_observations',126))
+                           options.get('risk_min_observations',126),keep_cache=False)
     weights = weights.loc[ret.index]
     result = BacktestResult(cfg,snapshot.id,pd.DataFrame({'Strategy':ret,'SP500':benchmark}),
         {'Strategy':performance_metrics(ret,benchmark,cfg['rf_daily'],'Idio Momentum'),
