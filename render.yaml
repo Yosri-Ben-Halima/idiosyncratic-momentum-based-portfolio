@@ -1,4 +1,4 @@
-# Render Blueprint: password-protected research dashboard on the free plan.
+# Render Blueprint: public research dashboard (no sign-in) on the free plan.
 services:
   - type: web
     name: residual-lab
@@ -10,7 +10,3 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
-      - key: DASHBOARD_USER
-        value: admin
-      - key: DASHBOARD_PASSWORD
-        sync: false  # entered in the Render dashboard, never committed
