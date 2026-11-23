@@ -71,14 +71,17 @@ class RiskDiagnostics:
         months = weights.index.to_period("M")
         monthly = np.r_[True, months[1:] != months[:-1]]
         changes = weights.diff().abs().sum(axis=1).gt(1e-12).to_numpy()
+        values = weights.to_numpy(dtype=float)
         snapshots = {}
-        for date in weights.index[monthly | changes]:
-            selected = weights.loc[date][weights.loc[date] > 0]
+        for row in np.flatnonzero(monthly | changes):
+            date = weights.index[row]
+            held = np.flatnonzero(values[row] > 0)
             metrics = dict.fromkeys(RISK_FIELDS, np.nan)
-            if not selected.empty:
+            if len(held):
                 covariance = self.covariance(date)
-                if selected.index.isin(covariance.columns).all():
-                    metrics = risk_metrics(selected.to_numpy(), covariance.loc[selected.index, selected.index].to_numpy())
+                position = covariance.columns.get_indexer(weights.columns[held])
+                if (position >= 0).all():
+                    metrics = risk_metrics(values[row, held], covariance.to_numpy()[np.ix_(position, position)])
             snapshots[date] = metrics
         # Method-based reindex carries snapshots, preserving explicit NaN cash rows.
         return pd.DataFrame.from_dict(snapshots, orient="index").reindex(weights.index, method="ffill")
