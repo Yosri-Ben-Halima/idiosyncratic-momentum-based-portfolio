@@ -1,0 +1,141 @@
+<article class="paper">
+<header>
+  <span class="eyebrow">METHODOLOGY NOTE</span>
+  <h1>Idiosyncratic Momentum in Large-Cap U.S. Equities</h1>
+  <p class="paper-sub">A rolling out-of-sample CAPM residual-momentum strategy with monthly rebalancing, an optional Shariah screen, and built-in robustness diagnostics.</p>
+  <div class="abstract"><strong>Abstract.</strong> Total-return momentum loads heavily on the market and on industry factors, which makes it prone to violent crashes when those factors reverse. This note documents a strategy that ranks S&amp;P&nbsp;500 stocks by the cumulative <em>idiosyncratic</em> component of their returns, i.e. the part left after removing exposure to the market. Each stock's residuals are estimated strictly out of sample from a rolling CAPM. They are summed over a formation window that skips the most recent month and standardised across stocks. The top names are held in equal weight. We state the exact estimator, the portfolio rules and the performance and risk statistics shown in this dashboard. We also list the biases that a backtest of this kind cannot rule out.</div>
+</header>
+
+<nav class="paper-toc" aria-label="Contents">
+  <a href="#doc-1">1. Motivation</a><a href="#doc-2">2. Signal</a><a href="#doc-3">3. Portfolio</a><a href="#doc-4">4. Returns &amp; costs</a><a href="#doc-5">5. Performance metrics</a><a href="#doc-6">6. Risk diagnostics</a><a href="#doc-7">7. Robustness</a><a href="#doc-8">8. Shariah screen</a><a href="#doc-9">9. Limitations</a><a href="#doc-ref">References</a>
+</nav>
+
+<section id="doc-1">
+  <h2>1. Motivation and intuition</h2>
+  <p>Cross-sectional momentum, buying recent winners and selling recent losers, is one of the most persistent anomalies in equity markets (Jegadeesh &amp; Titman, 1993; Asness, Moskowitz &amp; Pedersen, 2013). A stock's total return, however, mixes two very different things: compensation for its exposure to common factors, and news specific to the firm. After a strong bull market, total-return winners are mostly <em>high-beta</em> stocks. When the market rebounds from a crash, those bets lose together. This is the momentum-crash mechanism documented by Daniel &amp; Moskowitz (2016) and Grundy &amp; Martin (2001).</p>
+  <p>Residual (idiosyncratic) momentum ranks stocks only on the firm-specific part of their past returns. Blitz, Huij &amp; Martens (2011) show that this roughly halves the volatility of momentum and makes its profits far less dependent on the market regime, while keeping most of the premium. Gutierrez &amp; Pirinsky (2007) and Chaves (2016) find similar results. The usual explanation is <em>under-reaction</em>: investors update slowly on firm-specific news, so prices drift in the direction of that news for months afterwards.</p>
+  <p class="callout"><strong>Intuition in one line.</strong> Buy the stocks that have been beating what their market exposure alone would predict, steadily, over the last year, ignoring the most recent month.</p>
+</section>
+
+<section id="doc-2">
+  <h2>2. Signal construction</h2>
+  <h3>2.1 Excess returns</h3>
+  <p>Let \(P_{i,t}\) be the dividend- and split-adjusted close of stock \(i\) on trading day \(t\), and \(r_{i,t}=P_{i,t}/P_{i,t-1}-1\). With the S&amp;P&nbsp;500 index \(m\) as the market and a constant daily risk-free rate \(r_f=(1+r_f^{\text{ann}})^{1/252}-1\):</p>
+  $$x_t = r_{m,t}-r_f,\qquad y_{i,t}=r_{i,t}-r_f .$$
+
+  <h3>2.2 Rolling out-of-sample CAPM</h3>
+  <p>For every day \(t\) and stock \(i\), an ordinary least-squares CAPM is fitted on the trailing window of \(W\) days <em>ending the day before</em> \(t\), \(\mathcal{T}_t=\{t-W,\dots,t-1\}\):</p>
+  $$\hat\beta_{i,t}=\frac{\sum_{s\in\mathcal{T}_t}x_s y_{i,s}-n_t\,\bar x_t\,\bar y_{i,t}}{\sum_{s\in\mathcal{T}_t}x_s^2-n_t\,\bar x_t^{\,2}},\qquad \hat\alpha_{i,t}=\bar y_{i,t}-\hat\beta_{i,t}\,\bar x_t ,$$
+  <p>where \(n_t\) is the number of non-missing market observations in the window. The day-\(t\) residual is then a true forecast error, because day \(t\) itself never enters the fit:</p>
+  $$\hat\varepsilon_{i,t}=y_{i,t}-\bigl(\hat\alpha_{i,t}+\hat\beta_{i,t}\,x_t\bigr).$$
+  <p>A residual is discarded (set to missing) when fewer than \(\lfloor 0.7W\rfloor\) observations are available, or when the market has (numerically) zero variance in the window, \(\bigl|\sum x_s^2-n_t\bar x_t^2\bigr|<10^{-12}\). The rolling sums are computed in closed form for all stocks at once, so no per-stock regression loop is needed.</p>
+
+  <h3>2.3 Idiosyncratic momentum</h3>
+  <p>The raw signal sums residuals over a formation window of length \(W\) that ends \(S\) days before \(t\) (the <em>skip</em>):</p>
+  $$M_{i,t}=\sum_{s=t-S-W+1}^{t-S}\hat\varepsilon_{i,s}\qquad\text{(at least }\lfloor0.7W\rfloor\text{ non-missing terms).}$$
+  <p>Skipping the last month (\(S=21\) by default) avoids the well-known one-month <em>short-term reversal</em> effect (Jegadeesh, 1990), which would otherwise work against the momentum signal. Unlike Blitz et al. (2011), who divide the residual sum by its standard deviation, the raw sum is used here. Scale enters only through the cross-sectional standardisation below.</p>
+
+  <h3>2.4 Cross-sectional standardisation</h3>
+  $$z_{i,t}=\frac{M_{i,t}-\mu_t}{\sigma_t},\qquad \mu_t=\tfrac1{N_t}\sum_j M_{j,t},\quad \sigma_t^2=\tfrac1{N_t-1}\sum_j\bigl(M_{j,t}-\mu_t\bigr)^2 ,$$
+  <p>over the \(N_t\) stocks with a defined signal on day \(t\). The z-score makes the entry threshold \(c\) comparable across time even when the dispersion of residual returns changes.</p>
+</section>
+
+<section id="doc-3">
+  <h2>3. Portfolio construction</h2>
+  <p>Rebalance dates \(\tau_1<\tau_2<\dots\) are period ends (weekly on Fridays, month end or quarter end). At each \(\tau_k\), information is taken from the last trading day <em>strictly before</em> \(\tau_k\), denoted \(t^\ast_k\). A stock is <em>eligible</em> if</p>
+  $$\#\{s\le t^\ast_k: P_{i,s}\text{ observed}\}\ \ge H\quad\text{and}\quad z_{i,t^\ast_k}\text{ is defined.}$$
+  <p>The eligible stocks are ranked by \(z\) (ties keep universe order). The top \(K\) are kept, and from those only the ones that clear the threshold, \(z_{i,t^\ast_k}>c\):</p>
+  $$\mathcal{S}_k=\{\,i\in\operatorname{Top}_K(z_{\cdot,t^\ast_k}) : z_{i,t^\ast_k}>c\,\},\qquad w_{i,t}=\frac{\mathbf 1\{i\in\mathcal S_k\}}{|\mathcal S_k|}\quad\text{for } t\in(\tau_k,\tau_{k+1}] .$$
+  <p>If no stock clears the threshold, the portfolio holds cash (zero weights) until the next rebalance. Since \(c\) acts only as a filter on the top \(K\), a high threshold yields a <em>smaller, more concentrated</em> book rather than different names.</p>
+  <table class="paper-table"><thead><tr><th>Symbol</th><th>Setting</th><th>Default</th></tr></thead><tbody>
+    <tr><td>\(W\)</td><td>Momentum (and CAPM) window</td><td>252 days</td></tr>
+    <tr><td>\(S\)</td><td>Skip</td><td>21 days</td></tr>
+    <tr><td>\(K\)</td><td>Maximum holdings</td><td>30</td></tr>
+    <tr><td>\(c\)</td><td>Z-score threshold</td><td>2</td></tr>
+    <tr><td>\(H\)</td><td>Minimum price history</td><td>300 days</td></tr>
+    <tr><td>\(\kappa\)</td><td>Transaction cost</td><td>20 bps per unit of one-way turnover</td></tr>
+  </tbody></table>
+</section>
+
+<section id="doc-4">
+  <h2>4. Returns and transaction costs</h2>
+  <p>Weights decided at the close of day \(t-1\) earn day \(t\)'s return, so a signal can never trade on the price it was computed from:</p>
+  $$R_{p,t}=\sum_i w_{i,t-1}\,r_{i,t}\;-\;\kappa\cdot\underbrace{\tfrac12\sum_i\bigl|w_{i,t}-w_{i,t-1}\bigr|}_{\text{one-way turnover }\mathrm{TO}_t},\qquad \kappa=\text{bps}/10^4 .$$
+  <p>Between rebalances the target weights are held constant. In effect the book is reset to equal weight every day, with no cost charged for that reset. The Audit tab compares this with a <em>drifting</em> book, where weights move with prices between rebalances.</p>
+</section>
+
+<section id="doc-5">
+  <h2>5. Performance statistics</h2>
+  <p>With \(T\) daily returns, annualisation factor \(A=252\), and benchmark \(R_{b,t}\) (S&amp;P&nbsp;500):</p>
+  $$\text{CAGR}=\Bigl(\prod_{t}(1+R_{p,t})\Bigr)^{A/T}-1,\qquad \sigma_{\text{ann}}=\sqrt{A}\,\operatorname{sd}(R_p),$$
+  $$\text{Sharpe}=\sqrt{A}\,\frac{\overline{R_p-r_f}}{\operatorname{sd}(R_p-r_f)},\qquad \text{Sortino}=\frac{A\,\overline{R_p-r_f}}{\sqrt{A}\,\operatorname{sd}\bigl(\{R_{p,t}-r_f<0\}\bigr)},$$
+  $$\mathrm{DD}_t=\frac{V_t}{\max_{s\le t}V_s}-1,\quad V_t=\prod_{s\le t}(1+R_{p,s}),\qquad \text{Calmar}=\frac{\text{CAGR}}{|\min_t \mathrm{DD}_t|},$$
+  $$\beta=\frac{\operatorname{cov}(R_p,R_b)}{\operatorname{var}(R_b)},\qquad \alpha_{\text{ann}}=\bigl(1+\bar R_p-r_f-\beta(\bar R_b-r_f)\bigr)^{A}-1,\qquad \text{IR}=\sqrt{A}\,\frac{\overline{R_p-R_b}}{\operatorname{sd}(R_p-R_b)} .$$
+  <p>The Monte Carlo forecast resamples historical daily strategy returns in contiguous 21-day blocks (a moving-block bootstrap, Künsch 1989). This keeps short-range autocorrelation and volatility clustering that an i.i.d. resample would destroy.</p>
+</section>
+
+<section id="doc-6">
+  <h2>6. Risk diagnostics</h2>
+  <p>On every rebalance (and every day the weights change), the covariance \(\Sigma\) of the held stocks is estimated from the trailing \(L\) daily returns (default 252), using only stocks with complete history in that window (at least 126 observations). With \(\sigma_p=\sqrt{w^\top\Sigma w}\):</p>
+  $$\text{DR}=\frac{\sum_i w_i\sigma_i}{\sigma_p},\qquad \mathrm{RC}_i=w_i(\Sigma w)_i,\qquad s_i=\frac{|\mathrm{RC}_i|}{\sum_j|\mathrm{RC}_j|},\qquad N_{\text{eff}}=\frac1{\sum_i s_i^2}.$$
+  <p>DR is the diversification ratio of Choueifaty &amp; Coignard (2008): 1 means no diversification benefit. \(\mathrm{RC}_i\) are Euler risk contributions, which add up to the portfolio variance. \(N_{\text{eff}}\) is the effective number of independent risk contributors; an equal-weight book of 30 highly correlated names can have \(N_{\text{eff}}\) far below 30.</p>
+</section>
+
+<section id="doc-7">
+  <h2>7. Robustness and audit</h2>
+  <p><strong>Parameter sensitivity.</strong> The strategy is re-run on a grid of windows \(W\) and thresholds \(c\), and each cell is evaluated separately before and after a split date. A result that holds only in one narrow cell, or only before the split, is likely <em>overfit</em>. Even a stable surface is still in-sample evidence: picking the best cell after seeing it is a form of data snooping (White, 2000; Bailey &amp; López de Prado, 2014).</p>
+  <p><strong>Audit.</strong> The Audit tab:</p>
+  <ul>
+    <li>Reproduces the completed run exactly.</li>
+    <li>Tests for look-ahead by shocking, then deleting, all prices after a cutoff and checking that earlier weights do not change.</li>
+    <li>Checks the vectorised CAPM against a direct paired regression where data are missing.</li>
+    <li>Compares variants: drifting weights, a CAPM fitted on matched observations only, and a zero risk-free rate.</li>
+    <li>Attributes the total return to individual stocks and to trading costs.</li>
+  </ul>
+</section>
+
+<section id="doc-8">
+  <h2>8. Optional Shariah screen</h2>
+  <p>When enabled, the universe is restricted before any signal is computed. A business-activity screen first removes prohibited activities such as conventional financial services. Two financial-ratio standards are then available:</p>
+  <table class="paper-table"><thead><tr><th>Ratio</th><th>AAOIFI (Std. 21)</th><th>Wahed / FTSE</th></tr></thead><tbody>
+    <tr><td>Interest-bearing debt</td><td>\(&lt;30\%\) of market cap (current and 12-month average)</td><td>\(&lt;33.3\%\) of total assets</td></tr>
+    <tr><td>Cash and interest-bearing securities</td><td>\(&lt;30\%\) of market cap (current and 12-month average)</td><td>\(&lt;33.3\%\) of total assets</td></tr>
+    <tr><td>Receivables + cash</td><td>n/a</td><td>\(&lt;50\%\) of total assets</td></tr>
+    <tr><td>Impermissible income</td><td>\(&lt;5\%\) of revenue</td><td>\(\le5\%\) of revenue</td></tr>
+  </tbody></table>
+  <p>The share of impermissible income of a passing stock is reported as its purification percentage.</p>
+</section>
+
+<section id="doc-9">
+  <h2>9. Limitations</h2>
+  <ul>
+    <li><strong>Survivorship bias.</strong> The universe is <em>today's</em> S&amp;P&nbsp;500 membership applied to the whole history. Firms that were removed or went bankrupt are missing, and current members were partly selected <em>because</em> they did well. This flatters any long-only strategy, and momentum in particular.</li>
+    <li><strong>Look-ahead in the Shariah screen.</strong> Ratios come from the latest fundamentals rather than point-in-time filings.</li>
+    <li><strong>Execution.</strong> Trades fill at the close with a flat cost. Spreads, market impact and borrow are not modelled, and the daily equal-weight reset is free.</li>
+    <li><strong>Single-factor residuals.</strong> CAPM residuals still contain size, value and industry exposure. A Fama–French (1993) residual, as in Blitz et al. (2011), would isolate firm-specific news more cleanly.</li>
+    <li><strong>Constant risk-free rate.</strong> A single annual rate is used for the whole sample.</li>
+    <li><strong>Multiple testing.</strong> Every parameter change made after looking at these results uses up some of the sample's out-of-sample value.</li>
+  </ul>
+</section>
+
+<section id="doc-ref" class="references">
+  <h2>References</h2>
+  <ol>
+    <li>Asness, C. S., Moskowitz, T. J., &amp; Pedersen, L. H. (2013). Value and momentum everywhere. <em>Journal of Finance</em>, 68(3), 929–985.</li>
+    <li>AAOIFI (2017). <em>Shari'ah Standard No. 21: Financial Papers (Shares and Bonds)</em>. Accounting and Auditing Organization for Islamic Financial Institutions.</li>
+    <li>Bailey, D. H., &amp; López de Prado, M. (2014). The deflated Sharpe ratio: correcting for selection bias, backtest overfitting and non-normality. <em>Journal of Portfolio Management</em>, 40(5), 94–107.</li>
+    <li>Blitz, D., Huij, J., &amp; Martens, M. (2011). Residual momentum. <em>Journal of Empirical Finance</em>, 18(3), 506–521.</li>
+    <li>Chaves, D. B. (2016). Idiosyncratic momentum: U.S. and international evidence. <em>Journal of Investing</em>, 25(2), 64–76.</li>
+    <li>Choueifaty, Y., &amp; Coignard, Y. (2008). Toward maximum diversification. <em>Journal of Portfolio Management</em>, 35(1), 40–51.</li>
+    <li>Daniel, K., &amp; Moskowitz, T. J. (2016). Momentum crashes. <em>Journal of Financial Economics</em>, 122(2), 221–247.</li>
+    <li>Fama, E. F., &amp; French, K. R. (1993). Common risk factors in the returns on stocks and bonds. <em>Journal of Financial Economics</em>, 33(1), 3–56.</li>
+    <li>Grundy, B. D., &amp; Martin, J. S. (2001). Understanding the nature of the risks and the source of the rewards to momentum investing. <em>Review of Financial Studies</em>, 14(1), 29–78.</li>
+    <li>Gutierrez, R. C., &amp; Pirinsky, C. A. (2007). Momentum, reversal, and the trading behaviors of institutions. <em>Journal of Financial Markets</em>, 10(1), 48–75.</li>
+    <li>Jegadeesh, N. (1990). Evidence of predictable behavior of security returns. <em>Journal of Finance</em>, 45(3), 881–898.</li>
+    <li>Jegadeesh, N., &amp; Titman, S. (1993). Returns to buying winners and selling losers: implications for stock market efficiency. <em>Journal of Finance</em>, 48(1), 65–91.</li>
+    <li>Künsch, H. R. (1989). The jackknife and the bootstrap for general stationary observations. <em>Annals of Statistics</em>, 17(3), 1217–1241.</li>
+    <li>Sharpe, W. F. (1964). Capital asset prices: a theory of market equilibrium under conditions of risk. <em>Journal of Finance</em>, 19(3), 425–442.</li>
+    <li>White, H. (2000). A reality check for data snooping. <em>Econometrica</em>, 68(5), 1097–1126.</li>
+  </ol>
+</section>
+</article>

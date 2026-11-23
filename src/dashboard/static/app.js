@@ -97,7 +97,7 @@ function readConfig(){
     if(name.startsWith('risk_'))continue;
     cfg[name]=name==='rebalance_freq'?form.elements[name].value:Number(form.elements[name].value);
   }
-  cfg.rf_annual/=100;cfg.start_date=form.elements.start_date.value;cfg.end_date=form.elements.end_date.value;
+  cfg.rf_annual/=100;cfg.start_date=form.elements.start_date.value;if(form.elements.end_today.checked)form.elements.end_date.value=new Date().toLocaleDateString('en-CA');cfg.end_date=form.elements.end_date.value;
   cfg.halal_filter=form.elements.halal_filter.checked;cfg.halal_standard=form.elements.halal_standard.value;
   const s=cfg.sensitivity={enabled:form.elements.sensitivity_enabled.checked,risk_window:Number(form.elements.risk_window.value),risk_min_observations:Number(form.elements.risk_min_observations.value),split_date:form.elements.split_date.value};
   if(s.enabled){
@@ -110,7 +110,7 @@ function readConfig(){
 }
 function markPending(){
   const enabled=form.elements.sensitivity_enabled.checked;$('#grid-settings').hidden=!enabled;
-  $('#halal-standard-control').hidden=!form.elements.halal_filter.checked;
+  $('#halal-standard-control').hidden=!form.elements.halal_filter.checked;form.elements.end_date.disabled=form.elements.end_today.checked;
   for(const [name] of grid){form.elements[name].required=enabled;form.elements[name].disabled=!enabled;}
   let fingerprint;try{fingerprint=JSON.stringify(readConfig());}catch(e){fingerprint='invalid';}
   const changed=state.result&&(fingerprint!==state.completedFingerprint||state.bootstrap.snapshot?.id!==state.completedSnapshot);
@@ -141,7 +141,8 @@ async function run(){
   try{
     const job=await api('/api/runs',cfg);await waitForJob(job);
     const result=await api('/api/runs/'+job.id+'/results');
-    state.result=result;state.runId=job.id;state.audit=null;state.completedFingerprint=fingerprint;state.completedSnapshot=snapshot;
+    if(job.kind==='refresh_run')await bootstrap(false);
+    state.result=result;state.runId=job.id;state.audit=null;state.completedFingerprint=fingerprint;state.completedSnapshot=job.kind==='refresh_run'?state.bootstrap.snapshot?.id:snapshot;
     $('#downloads').hidden=true;renderResult();
     if(result.warnings.length)notice(result.warnings.join(' '),true);
   }catch(e){notice(e.message);}finally{setBusy(false);markPending();}
@@ -184,8 +185,18 @@ function renderResult(){
   renderTab();
 }
 function table(title,headers,rows){return `<article class="table-card"><h2>${escapeText(title)}</h2><table><thead><tr>${headers.map(x=>`<th scope="col">${escapeText(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map((x,i)=>`<td class="${i===1?'strategy-cell':i===2?'benchmark-cell':''}">${escapeText(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></article>`;}
+// KaTeX loads only when the documentation is first opened; without network the LaTeX source stays readable.
+async function renderDocs(){
+  const docs=$('#docs');if(docs.dataset.loaded)return;docs.dataset.loaded='1';
+  try{docs.innerHTML=await (await fetch('/static/docs.html')).text();}catch(e){docs.dataset.loaded='';docs.textContent='Documentation could not be loaded.';return;}
+  const load=(tag,attrs)=>new Promise((ok,fail)=>{const el=Object.assign(document.createElement(tag),attrs);el.onload=ok;el.onerror=fail;document.head.append(el);});
+  const base='https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/';
+  try{await load('link',{rel:'stylesheet',href:base+'katex.min.css'});await load('script',{src:base+'katex.min.js'});await load('script',{src:base+'contrib/auto-render.min.js'});
+    renderMathInElement(docs,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false});}catch(e){}
+}
 function renderTab(){
-  const r=state.result;$('#dashboard').hidden=!r||['sensitivity','audit'].includes(state.tab);$('#sensitivity').hidden=state.tab!=='sensitivity';$('#audit').hidden=state.tab!=='audit';$('#empty').hidden=!!r||['sensitivity','audit'].includes(state.tab);
+  const r=state.result,own=['sensitivity','audit','docs'].includes(state.tab);$('#dashboard').hidden=!r||own;$('#sensitivity').hidden=state.tab!=='sensitivity';$('#audit').hidden=state.tab!=='audit';$('#docs').hidden=state.tab!=='docs';$('#empty').hidden=!!r||own;
+  if(state.tab==='docs'){renderDocs();return;}
   if(state.tab==='audit'){AuditView.render(r,state.audit,state.active);return;}
   if(state.tab==='sensitivity'){renderSensitivity();return;}if(!r)return;
   const charts=$('#charts');for(const el of charts.querySelectorAll('.chart'))Plotly.purge(el);charts.replaceChildren();
