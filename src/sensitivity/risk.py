@@ -42,16 +42,21 @@ class RiskDiagnostics:
     complete selected-stock observations; insufficient histories remain missing.
     No risk-free quote, market data download or change of strategy weights occurs.
     """
-    def __init__(self, prices, window=252, min_observations=126):
+    def __init__(self, prices, window=252, min_observations=126, keep_cache=True):
         if int(window) != window or int(min_observations) != min_observations or not 2 <= min_observations <= window:
             raise ValueError("Risk window/minimum must be integers with 2 <= minimum <= window")
         self.window = int(window)
         self.min_observations = int(min_observations)
         self.returns = prices.ffill().pct_change(fill_method=None)
         self.cache = {}
+        # False keeps only the latest date (~2 MB) instead of one ~500x500 matrix per date;
+        # a single backtest uses each date once, only sensitivity grids reuse them.
+        self.keep_cache = keep_cache
 
     def covariance(self, date):
         if date not in self.cache:
+            if not self.keep_cache:
+                self.cache.clear()
             end = self.returns.index.searchsorted(date, side="left")
             history = self.returns.iloc[max(0, end-self.window):end].dropna(how="all")
             if len(history) < self.min_observations:

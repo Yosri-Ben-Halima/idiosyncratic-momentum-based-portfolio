@@ -21,8 +21,11 @@ def monte_carlo(returns,paths,horizon,seed=42):
             path.extend(values[start:start+block])
         sims[i] = np.cumprod(1+np.asarray(path[:horizon]))-1
     percentiles = [1,5,25,50,75,95,99]
-    return {'bands':{p:np.percentile(sims,p,axis=0) for p in percentiles},
-            'terminal':sims[:,-1].copy(),
+    terminal = sims[:,-1].copy()
+    # One in-place pass instead of a full copy of sims per band (exact order statistics either way).
+    bands = np.percentile(sims,percentiles,axis=0,overwrite_input=True)
+    return {'bands':dict(zip(percentiles,bands)),
+            'terminal':terminal,
             'dates':pd.bdate_range(returns.index[-1]+pd.Timedelta(days=1),periods=horizon)}
 
 
