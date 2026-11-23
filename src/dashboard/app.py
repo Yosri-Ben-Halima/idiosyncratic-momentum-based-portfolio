@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from src.engine import normalize_config
-from src.engine.config import LIMITS
+from src.engine.config import LIMITS, covers
 from src.engine.snapshots import discover_snapshot
 from .jobs import JobManager
 
@@ -68,9 +68,11 @@ def create_app(source=None,results_root=Path('results')):
     @app.post('/api/runs',status_code=202)
     def submit(values:dict=Body(...)):
         snap = state['snapshot']
-        if snap is None:
-            raise HTTPException(409,'No saved price snapshot. Refresh data first.')
         try:
+            cfg = normalize_config(values,defaults())
+            if snap is None or not covers(snap,cfg):
+                # Dates past the saved prices: download newer prices first, then run.
+                return manager.submit('refresh_run',cfg)
             cfg = normalize_config(values,defaults(),snap)
             return manager.submit('run',cfg,snap)
         except (ValueError,TypeError) as error:

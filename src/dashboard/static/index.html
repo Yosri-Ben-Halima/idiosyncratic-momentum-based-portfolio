@@ -18,7 +18,7 @@
     <div class="sidebar-title"><span class="eyebrow">MODEL CONFIGURATION</span><h2>Strategy parameters</h2><p>Adjust the signal. Explore the outcome.</p></div>
     <form id="parameters">
       <div id="primary-controls"></div>
-      <fieldset class="period"><legend>Backtest period</legend><div class="dates"><label>Start<input type="date" name="start_date" required></label><label>End · exclusive<input type="date" name="end_date" required></label></div></fieldset>
+      <fieldset class="period"><legend>Backtest period</legend><div class="dates"><label>Start<input type="date" name="start_date" required></label><label>End · exclusive<input type="date" name="end_date" required></label></div><label class="switch-row"><span>End today<small>Latest closed session; downloads newer prices if needed</small></span><input type="checkbox" name="end_today" role="switch"></label></fieldset>
       <details class="advanced"><summary>Advanced settings <span>＋</span></summary><div id="advanced-controls"></div></details>
       <label class="switch-row"><span>Halal filter<small>Shariah-compliant stocks only</small></span><input type="checkbox" name="halal_filter" role="switch"></label>
       <div id="halal-standard-control" class="control" hidden><label for="halal_standard">Shariah standard</label><select id="halal_standard" name="halal_standard"><option value="aaoifi">AAOIFI · debt vs market cap</option><option value="wahed">Wahed / FTSE · debt vs assets</option></select><small class="help">Uses today's screen for the whole period (look-ahead).</small></div>
@@ -33,7 +33,7 @@
     <div id="message" class="message" role="alert" hidden></div>
     <div id="progress" class="progress-card" role="status" aria-live="polite" hidden><div class="progress-top"><span class="spinner"></span><strong id="stage">Computing</strong><span id="elapsed">0s</span></div><div class="progress-track"><span></span></div><p>Your last completed results remain visible while the engine runs.</p></div>
     <section id="kpis" class="kpis" aria-label="Performance summary"></section>
-    <nav class="tabs" aria-label="Dashboard views" role="tablist"><button role="tab" aria-selected="true" data-tab="performance">Performance</button><button role="tab" aria-selected="false" data-tab="risk">Risk</button><button role="tab" aria-selected="false" data-tab="portfolio">Portfolio</button><button role="tab" aria-selected="false" data-tab="sensitivity">Sensitivity <span class="tab-dot"></span></button><button role="tab" aria-selected="false" data-tab="audit" aria-controls="audit">Audit</button></nav>
+    <nav class="tabs" aria-label="Dashboard views" role="tablist"><button role="tab" aria-selected="true" data-tab="performance">Performance</button><button role="tab" aria-selected="false" data-tab="risk">Risk</button><button role="tab" aria-selected="false" data-tab="portfolio">Portfolio</button><button role="tab" aria-selected="false" data-tab="sensitivity">Sensitivity <span class="tab-dot"></span></button><button role="tab" aria-selected="false" data-tab="audit" aria-controls="audit">Audit</button><button role="tab" aria-selected="false" data-tab="docs" aria-controls="docs">Documentation</button></nav>
     <section id="empty" class="empty-state"><div class="empty-art"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><span class="eyebrow">YOUR NEXT EXPERIMENT STARTS HERE</span><h2>From signal to conviction.</h2><p>Choose your parameters and run a backtest to explore performance, portfolio risk, and the shape of your strategy.</p><div class="empty-pills"><span>↗ Benchmark comparisons</span><span>▥ Risk diagnostics</span><span>◇ 3D sensitivity</span></div><button id="empty-run" class="button primary">Run with current settings →</button><small>The computation engine runs locally on your machine.</small></section>
     <section id="dashboard" hidden><div id="charts" class="chart-grid"></div><div id="tables"></div></section>
     <section id="sensitivity" hidden>
@@ -44,6 +44,7 @@
         <div id="stability" class="insight-card"></div>
       </div>
     </section>
+    <section id="docs" role="tabpanel" aria-label="Strategy documentation" hidden></section>
     <section id="audit" role="tabpanel" aria-label="Backtest audit" hidden>
       <div class="audit-toolbar"><div><span class="eyebrow">CHALLENGE THE RESULT</span><h2>What survives a closer look?</h2><p>Check signal timing, test assumptions, and see where the gains came from.</p></div><div class="audit-actions"><button id="audit-download" class="button secondary" disabled>↓ Evidence JSON</button><button id="audit-run" class="button primary" disabled>Run audit →</button></div></div>
       <div id="audit-content" aria-live="polite"></div>

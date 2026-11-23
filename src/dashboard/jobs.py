@@ -7,7 +7,8 @@ from pathlib import Path
 from threading import RLock
 import time
 import uuid
-from src.engine import run_backtest
+import pandas as pd
+from src.engine import normalize_config, run_backtest
 from src.engine.exports import export_result
 from src.engine.snapshots import refresh_snapshot
 from src.engine.audit import run_audit
@@ -47,7 +48,18 @@ class JobManager:
             with self.lock:
                 job['stage'] = message
         try:
-            if job['kind']=='run':
+            if job['kind'] in ('run','refresh_run'):
+                if job['kind']=='refresh_run':
+                    snapshot = refresh_snapshot(job['config'],self.root,progress)
+                    if self.on_refresh:
+                        self.on_refresh(snapshot)
+                    config = dict(job['config'])
+                    if pd.Timestamp(config['end_date'])<=pd.Timestamp.today().normalize()+pd.Timedelta(days=1):
+                        # The download holds every published session; days up to tomorrow without one are holidays or not closed yet.
+                        config['end_date'] = min(config['end_date'],snapshot.config['end_date'])
+                    config = normalize_config({},config,snapshot)
+                    with self.lock:
+                        job['config'] = config
                 result = run_backtest(snapshot,job['config'],progress)
                 progress('Building interactive dashboard')
                 payload = build_dashboard_payload(result)

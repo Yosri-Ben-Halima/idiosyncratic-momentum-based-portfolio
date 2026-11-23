@@ -14,6 +14,13 @@ INTEGER = {'momentum_window','momentum_skip','top_k','min_history',
 SENSITIVITY_KEYS = {'enabled','windows','cutoffs','split_date','risk_window','risk_min_observations'}
 
 
+def covers(snapshot, cfg):
+    """True when the saved prices span the requested start and exclusive end dates."""
+    # Weekends have no missing trading observations; metadata cannot extend coverage.
+    coverage_end = snapshot.prices.index[-1]+pd.offsets.BDay(1)
+    return snapshot.prices.index[0] <= pd.Timestamp(cfg['start_date']) and pd.Timestamp(cfg['end_date']) <= coverage_end
+
+
 def normalize_config(values, defaults, snapshot=None):
     allowed = set(LIMITS) | {'start_date','end_date','rebalance_freq','sensitivity','halal_filter','halal_standard'}
     if set(values)-allowed:
@@ -55,9 +62,7 @@ def normalize_config(values, defaults, snapshot=None):
         raise ValueError('dates: start must precede the exclusive end date') from None
     cfg['start_date'],cfg['end_date'] = str(start.date()),str(end.date())
     if snapshot:
-        # Weekends have no missing trading observations; metadata cannot extend coverage.
-        coverage_end = snapshot.prices.index[-1]+pd.offsets.BDay(1)
-        if start < snapshot.prices.index[0] or end > coverage_end:
+        if not covers(snapshot,cfg):
             raise ValueError('dates: outside saved snapshot coverage; refresh data first')
         if len(snapshot.prices.loc[(snapshot.prices.index>=start)&(snapshot.prices.index<end)])<2:
             raise ValueError('dates: at least two evaluation sessions are required')
