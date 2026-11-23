@@ -1,5 +1,8 @@
 """Same-origin, loopback-only local application and computation API."""
+import base64
 from contextlib import asynccontextmanager
+import os
+import secrets
 from copy import deepcopy
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -26,10 +29,15 @@ def create_app(source=None,results_root=Path('results')):
         manager.close()
     app = FastAPI(lifespan=lifespan,docs_url=None,redoc_url=None)
     app.state.jobs = manager
+    # Hosted mode: a password secret replaces the localhost-only guard.
+    password = os.environ.get('DASHBOARD_PASSWORD')
+    expected = 'Basic '+base64.b64encode(f"{os.environ.get('DASHBOARD_USER','admin')}:{password}".encode()).decode()
     @app.middleware('http')
     async def local_only(request,call_next):
-        host = request.url.hostname
-        if host not in ('localhost','127.0.0.1','::1'):
+        if password:
+            if not secrets.compare_digest(request.headers.get('authorization','').encode(),expected.encode()):
+                return JSONResponse({'detail':'Sign in required'},401,headers={'WWW-Authenticate':'Basic realm="Residual Lab"'})
+        elif request.url.hostname not in ('localhost','127.0.0.1','::1'):
             return JSONResponse({'detail':'Only localhost requests are accepted'},403)
         origin = request.headers.get('origin')
         if request.method not in ('GET','HEAD','OPTIONS') and origin:
