@@ -1,0 +1,16 @@
+# Render Blueprint: password-protected research dashboard on the free plan.
+services:
+  - type: web
+    name: residual-lab
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m src.dashboard --host 0.0.0.0
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DASHBOARD_USER
+        value: admin
+      - key: DASHBOARD_PASSWORD
+        sync: false  # entered in the Render dashboard, never committed
